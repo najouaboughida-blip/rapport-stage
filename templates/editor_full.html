@@ -1,0 +1,585 @@
+<!-- templates/editor_full.html -->
+{% extends "base.html" %}
+
+{% block title %}Éditer le Rapport - {{ app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .editor-container {
+        display: flex;
+        gap: 20px;
+        height: calc(100vh - 200px);
+    }
+    
+    .editor-panel {
+        flex: 3;
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        overflow-y: auto;
+    }
+    
+    .tools-panel {
+        flex: 1;
+        background: #F8F9FA;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .toolbar {
+        background: #2C3E50;
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    
+    .tool-btn {
+        background: #34495E;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        transition: background 0.3s;
+    }
+    
+    .tool-btn:hover {
+        background: #4A6572;
+    }
+    
+    .editor-content {
+        min-height: 500px;
+        padding: 20px;
+        border: 1px solid #BDC3C7;
+        border-radius: 5px;
+        background: white;
+        outline: none;
+    }
+    
+    .editor-content h1, .editor-content h2, .editor-content h3 {
+        color: #2C3E50;
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+    
+    .editor-content p {
+        line-height: 1.6;
+        margin-bottom: 15px;
+    }
+    
+    .section-card {
+        background: white;
+        border-left: 4px solid #3498DB;
+        padding: 15px;
+        margin-bottom: 15px;
+        border-radius: 5px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .section-title {
+        color: #2980B9;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+    
+    .stats-card {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    .word-count {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #2C3E50;
+    }
+    
+    .action-buttons {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        gap: 10px;
+        z-index: 1000;
+    }
+    
+    .btn-action {
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: none;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    
+    .btn-action:hover {
+        transform: translateY(-2px);
+    }
+    
+    .btn-save {
+        background: #3498DB;
+        color: white;
+    }
+    
+    .btn-preview {
+        background: #2ECC71;
+        color: white;
+    }
+    
+    .btn-download {
+        background: #E74C3C;
+        color: white;
+    }
+    
+    .alert-save {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        animation: slideIn 0.3s;
+    }
+    
+    @keyframes slideIn {
+        from { transform: translateX(100%); }
+        to { transform: translateX(0); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- En-tête de l'éditeur -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">
+                        <i class="fas fa-edit me-2 text-primary"></i>Éditeur de Rapport
+                    </h2>
+                    <p class="text-muted mb-0">
+                        Modifiez votre rapport, puis téléchargez le PDF final
+                    </p>
+                </div>
+                <div class="text-end">
+                    <span class="badge bg-info me-2" id="saveStatus">Non sauvegardé</span>
+                    <span class="badge bg-secondary" id="wordCount">0 mots</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Conteneur principal -->
+    <div class="editor-container">
+        <!-- Panneau d'édition -->
+        <div class="editor-panel">
+            <!-- Barre d'outils -->
+            <div class="toolbar">
+                <button class="tool-btn" onclick="formatText('bold')">
+                    <i class="fas fa-bold"></i> Gras
+                </button>
+                <button class="tool-btn" onclick="formatText('italic')">
+                    <i class="fas fa-italic"></i> Italique
+                </button>
+                <button class="tool-btn" onclick="formatText('underline')">
+                    <i class="fas fa-underline"></i> Souligné
+                </button>
+                <div class="vr" style="border-left: 1px solid white; height: 30px;"></div>
+                <button class="tool-btn" onclick="insertHeading(1)">
+                    <i class="fas fa-heading"></i> Titre 1
+                </button>
+                <button class="tool-btn" onclick="insertHeading(2)">
+                    <i class="fas fa-heading"></i> Titre 2
+                </button>
+                <button class="tool-btn" onclick="insertHeading(3)">
+                    <i class="fas fa-heading"></i> Titre 3
+                </button>
+                <div class="vr" style="border-left: 1px solid white; height: 30px;"></div>
+                <button class="tool-btn" onclick="insertList('ul')">
+                    <i class="fas fa-list-ul"></i> Liste
+                </button>
+                <button class="tool-btn" onclick="insertList('ol')">
+                    <i class="fas fa-list-ol"></i> Liste num.
+                </button>
+                <button class="tool-btn" onclick="insertImage()">
+                    <i class="fas fa-image"></i> Image
+                </button>
+                <button class="tool-btn" onclick="insertTable()">
+                    <i class="fas fa-table"></i> Tableau
+                </button>
+            </div>
+            
+            <!-- Zone d'édition -->
+            <div id="editor" class="editor-content" contenteditable="true">
+                <p>Chargement du contenu...</p>
+            </div>
+        </div>
+        
+        <!-- Panneau d'outils -->
+        <div class="tools-panel">
+            <h5 class="mb-3">
+                <i class="fas fa-tools me-2"></i>Outils
+            </h5>
+            
+            <!-- Statistiques -->
+            <div class="stats-card">
+                <h6 class="mb-2">Statistiques</h6>
+                <div class="word-count" id="wordCountDetailed">0</div>
+                <small class="text-muted">mots</small>
+                <div class="mt-2">
+                    <small>Caractères: <span id="charCount">0</span></small><br>
+                    <small>Sections: <span id="sectionCount">0</span></small>
+                </div>
+            </div>
+            
+            <!-- Sections du rapport -->
+            <div class="stats-card">
+                <h6 class="mb-2">Sections</h6>
+                <div id="sectionsList">
+                    <div class="section-card">
+                        <div class="section-title">Introduction</div>
+                        <small class="text-muted">0 mots</small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Téléchargement -->
+            <div class="stats-card">
+                <h6 class="mb-2">Export</h6>
+                <button class="btn btn-outline-primary w-100 mb-2" onclick="generatePDF()">
+                    <i class="fas fa-file-pdf me-2"></i>Générer PDF
+                </button>
+                <button class="btn btn-outline-success w-100 mb-2" onclick="exportWord()">
+                    <i class="fas fa-file-word me-2"></i>Exporter Word
+                </button>
+                <button class="btn btn-outline-secondary w-100" onclick="exportHTML()">
+                    <i class="fas fa-code me-2"></i>Exporter HTML
+                </button>
+            </div>
+            
+            <!-- Formatage académique -->
+            <div class="stats-card">
+                <h6 class="mb-2">Style académique</h6>
+                <select class="form-select form-select-sm mb-2" id="academicStyle">
+                    <option value="formal">Formel (recommandé)</option>
+                    <option value="technical">Technique</option>
+                    <option value="simple">Simple</option>
+                </select>
+                <button class="btn btn-sm btn-outline-info w-100" onclick="applyAcademicStyle()">
+                    <i class="fas fa-magic me-1"></i> Appliquer
+                </button>
+            </div>
+            
+            <!-- Sauvegarde automatique -->
+            <div class="stats-card">
+                <h6 class="mb-2">Sauvegarde</h6>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="autoSave" checked>
+                    <label class="form-check-label" for="autoSave">Sauvegarde auto (30s)</label>
+                </div>
+                <small class="text-muted" id="lastSave">Jamais sauvegardé</small>
+                <button class="btn btn-sm btn-success w-100 mt-2" onclick="manualSave()">
+                    <i class="fas fa-save me-1"></i> Sauvegarder maintenant
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Boutons d'action flottants -->
+    <div class="action-buttons">
+        <button class="btn-action btn-save" onclick="manualSave()">
+            <i class="fas fa-save"></i> Sauvegarder
+        </button>
+        <button class="btn-action btn-preview" onclick="previewReport()">
+            <i class="fas fa-eye"></i> Prévisualiser
+        </button>
+        <button class="btn-action btn-download" onclick="downloadFinalPDF()">
+            <i class="fas fa-download"></i> Télécharger PDF
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentReportId = "{{ report_id }}";
+let autoSaveInterval;
+let hasUnsavedChanges = false;
+
+$(document).ready(function() {
+    console.log("Éditeur chargé pour le rapport:", currentReportId);
+    
+    // Charger le contenu du rapport
+    loadReportContent();
+    
+    // Démarrer la sauvegarde automatique
+    startAutoSave();
+    
+    // Surveiller les modifications
+    $('#editor').on('input', function() {
+        hasUnsavedChanges = true;
+        $('#saveStatus').removeClass('bg-info').addClass('bg-warning').text('Modifications non sauvegardées');
+        updateWordCount();
+        updateSectionsList();
+    });
+    
+    // Mettre à jour les statistiques
+    updateWordCount();
+});
+
+// Charger le contenu du rapport
+function loadReportContent() {
+    fetch(`/api/get-report-content/${currentReportId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                $('#editor').html(data.content);
+                $('#saveStatus').addClass('bg-success').text('Chargé');
+                updateWordCount();
+                updateSectionsList();
+            } else {
+                $('#editor').html('<p class="text-danger">Erreur de chargement: ' + data.error + '</p>');
+            }
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            $('#editor').html('<p class="text-danger">Impossible de charger le rapport</p>');
+        });
+}
+
+// Sauvegarde manuelle
+function manualSave() {
+    saveContent(true);
+}
+
+// Sauvegarde automatique
+function startAutoSave() {
+    if ($('#autoSave').is(':checked')) {
+        autoSaveInterval = setInterval(() => {
+            if (hasUnsavedChanges) {
+                saveContent(false);
+            }
+        }, 30000); // 30 secondes
+    }
+}
+
+// Fonction de sauvegarde
+function saveContent(showAlert = false) {
+    const content = $('#editor').html();
+    
+    fetch(`/api/update-report/${currentReportId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            hasUnsavedChanges = false;
+            $('#saveStatus').removeClass('bg-warning').addClass('bg-success').text('Sauvegardé');
+            $('#lastSave').text('Dernière sauvegarde: ' + data.modified_at);
+            
+            if (showAlert) {
+                showAlertMessage('success', 'Rapport sauvegardé avec succès !');
+            }
+        } else {
+            if (showAlert) {
+                showAlertMessage('error', 'Erreur de sauvegarde: ' + data.error);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Erreur sauvegarde:', error);
+        if (showAlert) {
+            showAlertMessage('error', 'Erreur réseau');
+        }
+    });
+}
+
+// Télécharger le PDF final
+function downloadFinalPDF() {
+    // Sauvegarder d'abord
+    saveContent(false);
+    
+    // Télécharger le PDF
+    window.location.href = `/api/generate-final-pdf/${currentReportId}`;
+}
+
+// Générer PDF
+function generatePDF() {
+    saveContent(false);
+    
+    // Ouvrir dans un nouvel onglet pour prévisualisation
+    const win = window.open(`/api/generate-final-pdf/${currentReportId}`, '_blank');
+    if (win) {
+        win.focus();
+    }
+}
+
+// Prévisualisation
+function previewReport() {
+    saveContent(false);
+    
+    // Ouvrir la page de prévisualisation
+    window.open(`/preview/${currentReportId}`, '_blank');
+}
+
+// Compter les mots
+function updateWordCount() {
+    const text = $('#editor').text();
+    const words = text.trim().split(/\s+/).filter(word => word.length > 0).length;
+    const chars = text.length;
+    
+    $('#wordCount').text(words + ' mots');
+    $('#wordCountDetailed').text(words);
+    $('#charCount').text(chars);
+}
+
+// Mettre à jour la liste des sections
+function updateSectionsList() {
+    const sections = $('#editor').find('h1, h2, h3');
+    $('#sectionCount').text(sections.length);
+    
+    let sectionsHtml = '';
+    sections.each(function() {
+        const title = $(this).text().substring(0, 30) + '...';
+        sectionsHtml += `
+            <div class="section-card">
+                <div class="section-title">${title}</div>
+                <small class="text-muted">${$(this).nextUntil('h1, h2, h3').text().split(/\s+/).length} mots</small>
+            </div>
+        `;
+    });
+    
+    $('#sectionsList').html(sectionsHtml || '<div class="text-muted small">Aucune section détectée</div>');
+}
+
+// Outils de formatage
+function formatText(command) {
+    document.execCommand(command, false, null);
+    $('#editor').focus();
+}
+
+function insertHeading(level) {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const heading = document.createElement(`h${level}`);
+        heading.textContent = selection.toString() || 'Nouveau titre';
+        range.deleteContents();
+        range.insertNode(heading);
+    }
+}
+
+function insertList(type) {
+    document.execCommand('insert' + (type === 'ol' ? 'OrderedList' : 'UnorderedList'), false, null);
+}
+
+function insertImage() {
+    const url = prompt('URL de l\'image:', 'https://example.com/image.jpg');
+    if (url) {
+        document.execCommand('insertImage', false, url);
+    }
+}
+
+function insertTable() {
+    const rows = prompt('Nombre de lignes:', '3');
+    const cols = prompt('Nombre de colonnes:', '3');
+    
+    if (rows && cols) {
+        let tableHtml = '<table border="1" style="width:100%; border-collapse: collapse;">';
+        for (let i = 0; i < rows; i++) {
+            tableHtml += '<tr>';
+            for (let j = 0; j < cols; j++) {
+                tableHtml += `<td style="padding: 5px; border: 1px solid #ddd;">Cellule</td>`;
+            }
+            tableHtml += '</tr>';
+        }
+        tableHtml += '</table>';
+        
+        document.execCommand('insertHTML', false, tableHtml);
+    }
+}
+
+function applyAcademicStyle() {
+    const style = $('#academicStyle').val();
+    
+    // Appliquer des styles CSS selon le choix
+    switch(style) {
+        case 'formal':
+            $('#editor').css({
+                'font-family': 'Times New Roman, serif',
+                'line-height': '1.6',
+                'text-align': 'justify'
+            });
+            break;
+        case 'technical':
+            $('#editor').css({
+                'font-family': 'Courier New, monospace',
+                'line-height': '1.4'
+            });
+            break;
+        case 'simple':
+            $('#editor').css({
+                'font-family': 'Arial, sans-serif',
+                'line-height': '1.5'
+            });
+            break;
+    }
+    
+    showAlertMessage('info', 'Style académique appliqué');
+}
+
+function exportWord() {
+    saveContent(false);
+    window.location.href = `/export/word?session_id=${currentReportId}`;
+}
+
+function exportHTML() {
+    const content = $('#editor').html();
+    const blob = new Blob([content], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rapport_${currentReportId}.html`;
+    a.click();
+}
+
+function showAlertMessage(type, message) {
+    const alert = $(`
+        <div class="alert alert-${type} alert-dismissible fade show alert-save" role="alert">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `);
+    
+    $('.container-fluid').prepend(alert);
+    
+    setTimeout(() => {
+        alert.alert('close');
+    }, 3000);
+}
+
+// Arrêter la sauvegarde auto quand on quitte
+window.addEventListener('beforeunload', function(e) {
+    if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = 'Vous avez des modifications non sauvegardées. Voulez-vous vraiment quitter ?';
+    }
+});
+</script>
+{% endblock %}

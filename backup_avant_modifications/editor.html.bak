@@ -1,0 +1,11 @@
+<!-- Ajouter ce bouton dans editor.html, près des autres boutons d'action -->
+<div class="mt-4 pt-3 border-top">
+    <div class="d-grid gap-2">
+        <!-- Bouton existant... -->
+        <a href="{{ url_for('editor_enhanced', report_id=report_id) if report_id else '#' }}" 
+           class="btn btn-warning" 
+           {% if not report_id %}disabled{% endif %}>
+            <i class="fas fa-lock me-1"></i>Éditeur Structuré
+        </a>
+    </div>
+</div>

@@ -1,0 +1,1697 @@
+{% extends "base.html" %}
+
+{% block title %}Éditeur Structuré - {{ app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .editor-enhanced-container {
+        display: flex;
+        min-height: calc(100vh - 200px);
+        gap: 2rem;
+    }
+    
+    .structure-sidebar {
+        width: 320px;
+        background: white;
+        border-right: 1px solid var(--border-color);
+        padding: 1.5rem;
+        overflow-y: auto;
+        flex-shrink: 0;
+    }
+    
+    .editor-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 2rem;
+        background: #F8F9FA;
+    }
+    
+    .section-card {
+        background: white;
+        border: 2px solid #E9ECEF;
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+        cursor: pointer;
+        transition: all 0.3s;
+        position: relative;
+    }
+    
+    .section-card:hover {
+        border-color: var(--secondary-color);
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    }
+    
+    .section-card.active {
+        border-color: var(--secondary-color);
+        background: #E8F4FC;
+        border-left: 4px solid var(--secondary-color);
+    }
+    
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 0.75rem;
+    }
+    
+    .section-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-weight: 500;
+    }
+    
+    .section-badge.editable {
+        background: #3498DB;
+        color: white;
+    }
+    
+    .section-stats {
+        font-size: 0.8rem;
+        color: #7F8C8D;
+        margin-top: 0.5rem;
+    }
+    
+    .structure-guide {
+        background: linear-gradient(135deg, #FFF3CD 0%, #FFEAA7 100%);
+        border: 1px solid #FFEAA7;
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-top: 2rem;
+    }
+    
+    /* BARRE D'OUTILS WORD COMPLÈTE (comme votre code précédent) */
+    .word-toolbar {
+        background: white;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid #d4d4d4;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        align-items: center;
+    }
+    
+    .toolbar-group {
+        display: flex;
+        align-items: center;
+        padding: 0 0.5rem;
+        border-right: 1px solid #e0e0e0;
+    }
+    
+    .toolbar-group:last-child {
+        border-right: none;
+    }
+    
+    .word-btn {
+        width: 32px;
+        height: 32px;
+        border: 1px solid transparent;
+        background: transparent;
+        border-radius: 3px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #444;
+        font-size: 14px;
+    }
+    
+    .word-btn:hover {
+        background-color: #f0f0f0;
+        border-color: #c8c8c8;
+    }
+    
+    .word-btn.active {
+        background-color: #e0e0e0;
+        border-color: #c8c8c8;
+    }
+    
+    .font-selector {
+        width: 140px;
+        height: 32px;
+        border: 1px solid #c8c8c8;
+        border-radius: 3px;
+        padding: 0 8px;
+        font-size: 14px;
+    }
+    
+    .font-size-selector {
+        width: 60px;
+        height: 32px;
+        border: 1px solid #c8c8c8;
+        border-radius: 3px;
+        padding: 0 8px;
+        font-size: 14px;
+    }
+    
+    .color-picker-wrapper {
+        position: relative;
+        display: inline-block;
+    }
+    
+    .color-picker-btn {
+        width: 32px;
+        height: 32px;
+        border: 1px solid #c8c8c8;
+        border-radius: 3px;
+        position: relative;
+        cursor: pointer;
+    }
+    
+    .color-indicator {
+        width: 20px;
+        height: 20px;
+        border: 1px solid #ddd;
+        border-radius: 2px;
+        margin: 5px;
+    }
+    
+    .color-palette {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background: white;
+        border: 1px solid #c8c8c8;
+        border-radius: 4px;
+        padding: 10px;
+        z-index: 1000;
+        display: none;
+        grid-template-columns: repeat(8, 1fr);
+        gap: 4px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        width: 272px;
+    }
+    
+    .color-palette.active {
+        display: grid;
+    }
+    
+    .color-option {
+        width: 24px;
+        height: 24px;
+        border: 1px solid #ddd;
+        border-radius: 2px;
+        cursor: pointer;
+    }
+    
+    .color-option:hover {
+        transform: scale(1.1);
+        box-shadow: 0 0 0 2px #3498db;
+    }
+    
+    .custom-color-input {
+        grid-column: span 8;
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    
+    .custom-color-input input {
+        flex: 1;
+        height: 32px;
+        border: 1px solid #c8c8c8;
+        border-radius: 3px;
+        padding: 0 8px;
+    }
+    
+    .highlight-palette {
+        width: 180px;
+        grid-template-columns: repeat(6, 1fr);
+    }
+    
+    .format-painter-btn {
+        width: 32px;
+        height: 32px;
+        border: 1px solid #c8c8c8;
+        border-radius: 3px;
+        background: white;
+        cursor: pointer;
+        position: relative;
+    }
+    
+    .format-painter-btn:after {
+        content: "🎨";
+        font-size: 16px;
+    }
+    
+    .format-painter-btn.active {
+        background-color: #e3f2fd;
+        border-color: #2196f3;
+    }
+    
+    /* ÉDITEUR PAGE DE GARDE */
+    .cover-page-editor {
+        background: white;
+        border: 1px solid #d4d4d4;
+        border-radius: 10px;
+        padding: 2rem;
+        flex: 1;
+        min-height: 500px;
+        font-family: 'Times New Roman', serif;
+        font-size: 12pt;
+        line-height: 1.6;
+        overflow-y: auto;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+        text-align: center;
+    }
+    
+    .cover-page-editor:focus {
+        border-color: #4d90fe;
+        box-shadow: 0 0 0 1px #4d90fe;
+        outline: none;
+    }
+    
+    .cover-page-editable {
+        background: white;
+        border-radius: 8px;
+        padding: 3rem;
+        text-align: center;
+        margin: 0 auto;
+        min-height: 600px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        position: relative;
+        page-break-inside: avoid;
+        border: 2px dashed #E9ECEF;
+    }
+    
+    .cover-page-editable:hover {
+        border-color: #3498DB;
+    }
+    
+    .cover-editable-field {
+        cursor: text;
+        padding: 4px 8px;
+        border-radius: 4px;
+        transition: background 0.2s;
+    }
+    
+    .cover-editable-field:hover {
+        background: #f8f9fa;
+    }
+    
+    .cover-editable-field:focus {
+        background: #fff;
+        outline: 2px solid #3498DB;
+    }
+    
+    .section-content-editor {
+        background: white;
+        border: 1px solid #d4d4d4;
+        border-radius: 10px;
+        padding: 2rem;
+        flex: 1;
+        min-height: 500px;
+        font-family: 'Calibri', 'Segoe UI', Arial, sans-serif;
+        font-size: 11pt;
+        line-height: 1.5;
+        overflow-y: auto;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+    }
+    
+    .section-content-editor:focus {
+        border-color: #4d90fe;
+        box-shadow: 0 0 0 1px #4d90fe;
+        outline: none;
+    }
+    
+    /* Styles d'édition */
+    .editor-h1 { font-size: 24pt; font-weight: bold; margin: 20px 0 10px 0; color: #2c3e50; }
+    .editor-h2 { font-size: 18pt; font-weight: bold; margin: 18px 0 8px 0; color: #34495e; }
+    .editor-h3 { font-size: 14pt; font-weight: bold; margin: 16px 0 6px 0; color: #7f8c8d; }
+    .editor-quote { border-left: 4px solid #3498db; padding-left: 16px; margin: 12px 0; font-style: italic; color: #555; }
+    .editor-code { background: #f8f9fa; border: 1px solid #dee2e6; padding: 4px 8px; font-family: 'Courier New', monospace; }
+    
+    .editor-controls {
+        background: white;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-top: 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    /* Statistiques d'édition */
+    .editor-stats {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1.5rem;
+        display: none;
+    }
+    
+    .structure-validation {
+        background: #E8F6F3;
+        border: 1px solid #A3E4D7;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-top: 1.5rem;
+    }
+    
+    .validation-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .subsections-list {
+        margin-top: 0.75rem;
+        padding-left: 1rem;
+        border-left: 2px solid #E9ECEF;
+    }
+    
+    .subsection-item {
+        font-size: 0.85rem;
+        color: #7F8C8D;
+        margin-bottom: 0.25rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .subsection-item:before {
+        content: "•";
+        margin-right: 0.5rem;
+        color: var(--secondary-color);
+    }
+    
+    /* PAGE DE GARDE */
+    .cover-page-section {
+        background: white;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    
+    .cover-university {
+        color: #2C3E50;
+        font-size: 1.8rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+    
+    .cover-school {
+        color: #3498DB;
+        font-size: 1.2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .cover-title-main {
+        color: #1A5276;
+        font-size: 2rem;
+        font-weight: bold;
+        margin: 2rem 0;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #1A5276;
+        display: inline-block;
+    }
+    
+    .cover-project-title {
+        color: #2980B9;
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin: 1.5rem 0;
+        padding: 1.5rem;
+        background: #F0F7FC;
+        border-radius: 10px;
+        border: 1px solid #D6EAF8;
+    }
+    
+    .more-options-btn {
+        position: relative;
+    }
+    
+    .more-options-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background: white;
+        border: 1px solid #c8c8c8;
+        border-radius: 4px;
+        padding: 8px;
+        z-index: 1000;
+        display: none;
+        min-width: 200px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .more-options-menu.active {
+        display: block;
+    }
+    
+    .more-options-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .more-options-item:hover {
+        background-color: #f5f5f5;
+    }
+    
+    .line-spacing-input {
+        width: 80px;
+        height: 28px;
+        border: 1px solid #c8c8c8;
+        border-radius: 3px;
+        padding: 0 8px;
+    }
+    
+    @media (max-width: 992px) {
+        .editor-enhanced-container {
+            flex-direction: column;
+        }
+        
+        .structure-sidebar {
+            width: 100%;
+            border-right: none;
+            border-bottom: 1px solid var(--border-color);
+            max-height: 300px;
+        }
+        
+        .cover-page-editable {
+            padding: 1.5rem;
+        }
+        
+        .cover-university {
+            font-size: 1.4rem;
+        }
+        
+        .cover-title-main {
+            font-size: 1.6rem;
+        }
+        
+        .word-toolbar {
+            overflow-x: auto;
+        }
+        
+        .toolbar-group {
+            flex-shrink: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="editor-enhanced-container">
+    <!-- Sidebar : Structure académique -->
+    <div class="structure-sidebar">
+        <div class="mb-4">
+            <h5 class="mb-2">
+                <i class="fas fa-sitemap me-2"></i>Structure académique
+            </h5>
+            <p class="text-muted small mb-0">
+                Cliquez sur une section pour l'éditer.
+            </p>
+        </div>
+        
+        <!-- PAGE DE GARDE -->
+        <div class="section-card active" onclick="loadCoverPage()" id="coverPageCard">
+            <div class="section-header">
+                <div>
+                    <h6 class="mb-1"><i class="fas fa-file-contract me-2"></i> PAGE DE GARDE</h6>
+                    <small class="text-muted">Page titre avec toutes les informations officielles</small>
+                </div>
+                <span class="section-badge editable">
+                    <i class="fas fa-edit me-1"></i>Éditable
+                </span>
+            </div>
+            <div class="subsections-list">
+                <div class="subsection-item">Titre du rapport</div>
+                <div class="subsection-item">Informations étudiant</div>
+                <div class="subsection-item">Informations entreprise</div>
+            </div>
+            <div class="section-stats">
+                <i class="fas fa-font me-1"></i>
+                <span id="stats-cover">0</span> mots
+            </div>
+        </div>
+        
+        <!-- Sections du rapport -->
+        <div id="structureSections">
+            {% for section_id, section_info in structure.items() %}
+            <div class="section-card"
+                 data-section="{{ section_id }}"
+                 onclick="loadSection('{{ section_id }}')"
+                 id="card-{{ section_id }}">
+                
+                <div class="section-header">
+                    <div>
+                        <h6 class="mb-1">{{ section_info.title }}</h6>
+                        <small class="text-muted">{{ section_info.description }}</small>
+                    </div>
+                    <span class="section-badge editable">
+                        <i class="fas fa-edit me-1"></i>Éditable
+                    </span>
+                </div>
+                
+                {% if section_info.subsections %}
+                <div class="subsections-list">
+                    {% for subsection in section_info.subsections %}
+                    <div class="subsection-item">{{ subsection }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                
+                <div class="section-stats">
+                    <i class="fas fa-font me-1"></i>
+                    <span id="stats-{{ section_id }}">0</span> mots
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Guide -->
+        <div class="structure-guide">
+            <h6 class="mb-3">
+                <i class="fas fa-info-circle me-2"></i>Comment utiliser
+            </h6>
+            <ul class="small mb-0">
+                <li>Cliquez sur une section pour l'éditer</li>
+                <li>Utilisez la barre d'outils pour formater</li>
+                <li>Sauvegardez avec Ctrl+S</li>
+                <li>Téléchargez quand votre rapport est prêt</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Zone d'édition principale -->
+    <div class="editor-content">
+        <!-- En-tête -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 id="currentSectionTitle">
+                    <i class="fas fa-file-contract me-2"></i> PAGE DE GARDE
+                </h3>
+                <p class="text-muted mb-0" id="currentSectionDescription">
+                    Page titre officielle - Modifiable en direct
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-success" onclick="saveCurrent()">
+                    <i class="fas fa-save me-1"></i>Sauvegarder
+                </button>
+                <button class="btn btn-academic" onclick="downloadReport()">
+                    <i class="fas fa-download me-1"></i>Télécharger PDF
+                </button>
+            </div>
+        </div>
+        
+        <!-- BARRE D'OUTILS WORD COMPLÈTE (comme votre code précédent) -->
+        <div class="word-toolbar" id="wordToolbar">
+            <!-- Groupe Fichier -->
+            <div class="toolbar-group">
+                <button class="word-btn" onclick="saveCurrent()" title="Enregistrer (Ctrl+S)">
+                    <i class="fas fa-save"></i>
+                </button>
+            </div>
+            
+            <!-- Groupe Presse-papiers -->
+            <div class="toolbar-group">
+                <button class="word-btn" onclick="document.execCommand('copy')" title="Copier (Ctrl+C)">
+                    <i class="fas fa-copy"></i>
+                </button>
+                <button class="word-btn" onclick="document.execCommand('cut')" title="Couper (Ctrl+X)">
+                    <i class="fas fa-cut"></i>
+                </button>
+                <button class="word-btn" onclick="document.execCommand('paste')" title="Coller (Ctrl+V)">
+                    <i class="fas fa-paste"></i>
+                </button>
+            </div>
+            
+            <!-- Groupe Police -->
+            <div class="toolbar-group">
+                <select class="font-selector" id="fontSelector" onchange="changeFont(this.value)" title="Police">
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Calibri">Calibri</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Courier New">Courier New</option>
+                </select>
+                
+                <select class="font-size-selector" id="fontSizeSelector" onchange="changeFontSize(this.value)" title="Taille de police">
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                    <option value="11">11</option>
+                    <option value="12" selected>12</option>
+                    <option value="14">14</option>
+                    <option value="16">16</option>
+                    <option value="18">18</option>
+                    <option value="24">24</option>
+                    <option value="36">36</option>
+                </select>
+            </div>
+            
+            <!-- Groupe Format -->
+            <div class="toolbar-group">
+                <button class="word-btn" onclick="formatText('bold')" title="Gras (Ctrl+B)">
+                    <strong>B</strong>
+                </button>
+                <button class="word-btn" onclick="formatText('italic')" title="Italique (Ctrl+I)">
+                    <em>I</em>
+                </button>
+                <button class="word-btn" onclick="formatText('underline')" title="Souligné (Ctrl+U)">
+                    <u>U</u>
+                </button>
+                
+                <!-- Couleur du texte -->
+                <div class="color-picker-wrapper">
+                    <button class="color-picker-btn" onclick="toggleColorPalette('text')" title="Couleur du texte">
+                        <div class="color-indicator" id="textColorIndicator" style="background-color: #000000;"></div>
+                    </button>
+                    <div class="color-palette" id="textColorPalette">
+                        <!-- Couleurs standards Word -->
+                        <div class="color-option" style="background-color: #000000;" onclick="changeTextColor('#000000')"></div>
+                        <div class="color-option" style="background-color: #FFFFFF; border: 2px solid #ddd;" onclick="changeTextColor('#FFFFFF')"></div>
+                        <div class="color-option" style="background-color: #FF0000;" onclick="changeTextColor('#FF0000')"></div>
+                        <div class="color-option" style="background-color: #00FF00;" onclick="changeTextColor('#00FF00')"></div>
+                        <div class="color-option" style="background-color: #0000FF;" onclick="changeTextColor('#0000FF')"></div>
+                        <div class="color-option" style="background-color: #FFFF00;" onclick="changeTextColor('#FFFF00')"></div>
+                        <div class="color-option" style="background-color: #FF00FF;" onclick="changeTextColor('#FF00FF')"></div>
+                        <div class="color-option" style="background-color: #00FFFF;" onclick="changeTextColor('#00FFFF')"></div>
+                        <div class="color-option" style="background-color: #800000;" onclick="changeTextColor('#800000')"></div>
+                        <div class="color-option" style="background-color: #008000;" onclick="changeTextColor('#008000')"></div>
+                        <div class="color-option" style="background-color: #000080;" onclick="changeTextColor('#000080')"></div>
+                        <div class="color-option" style="background-color: #808000;" onclick="changeTextColor('#808000')"></div>
+                        <div class="color-option" style="background-color: #800080;" onclick="changeTextColor('#800080')"></div>
+                        <div class="color-option" style="background-color: #008080;" onclick="changeTextColor('#008080')"></div>
+                        <div class="color-option" style="background-color: #C0C0C0;" onclick="changeTextColor('#C0C0C0')"></div>
+                        <div class="color-option" style="background-color: #808080;" onclick="changeTextColor('#808080')"></div>
+                        <div class="color-option" style="background-color: #999999;" onclick="changeTextColor('#999999')"></div>
+                        <div class="color-option" style="background-color: #FF9900;" onclick="changeTextColor('#FF9900')"></div>
+                        <div class="color-option" style="background-color: #9900FF;" onclick="changeTextColor('#9900FF')"></div>
+                        <div class="color-option" style="background-color: #FFCC00;" onclick="changeTextColor('#FFCC00')"></div>
+                        <div class="color-option" style="background-color: #003366;" onclick="changeTextColor('#003366')"></div>
+                        <div class="color-option" style="background-color: #336699;" onclick="changeTextColor('#336699')"></div>
+                        <div class="color-option" style="background-color: #3366FF;" onclick="changeTextColor('#3366FF')"></div>
+                        <div class="color-option" style="background-color: #993300;" onclick="changeTextColor('#993300')"></div>
+                        
+                        <div class="custom-color-input">
+                            <input type="color" id="customTextColor" onchange="changeTextColor(this.value)">
+                            <button class="btn btn-sm btn-secondary" onclick="applyCustomTextColor()">OK</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Surligneur -->
+                <div class="color-picker-wrapper">
+                    <button class="color-picker-btn" onclick="toggleColorPalette('highlight')" title="Surligneur">
+                        <div class="color-indicator" id="highlightColorIndicator" style="background-color: #FFFF00; opacity: 0.6;"></div>
+                    </button>
+                    <div class="color-palette highlight-palette" id="highlightColorPalette">
+                        <div class="color-option" style="background-color: #FFFF00;" onclick="highlightText('#FFFF00')"></div>
+                        <div class="color-option" style="background-color: #00FF00;" onclick="highlightText('#00FF00')"></div>
+                        <div class="color-option" style="background-color: #00FFFF;" onclick="highlightText('#00FFFF')"></div>
+                        <div class="color-option" style="background-color: #FF00FF;" onclick="highlightText('#FF00FF')"></div>
+                        <div class="color-option" style="background-color: #FF9900;" onclick="highlightText('#FF9900')"></div>
+                        <div class="color-option" style="background-color: #FFCCCC;" onclick="highlightText('#FFCCCC')"></div>
+                        <div class="color-option" style="background-color: #CCFFCC;" onclick="highlightText('#CCFFCC')"></div>
+                        <div class="color-option" style="background-color: #CCFFFF;" onclick="highlightText('#CCFFFF')"></div>
+                        <div class="color-option" style="background-color: #FFCCFF;" onclick="highlightText('#FFCCFF')"></div>
+                        <div class="color-option" style="background-color: #FFFFCC;" onclick="highlightText('#FFFFCC')"></div>
+                        <div class="color-option" style="background-color: #CCCCFF;" onclick="highlightText('#CCCCFF')"></div>
+                        <div class="color-option" style="background-color: #E6E6FA;" onclick="highlightText('#E6E6FA')"></div>
+                        <div class="custom-color-input">
+                            <input type="color" id="customHighlightColor" onchange="highlightText(this.value)">
+                            <button class="btn btn-sm btn-secondary" onclick="applyCustomHighlightColor()">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Groupe Alignement -->
+            <div class="toolbar-group">
+                <button class="word-btn" onclick="formatText('justifyLeft')" title="Aligner à gauche">
+                    <i class="fas fa-align-left"></i>
+                </button>
+                <button class="word-btn" onclick="formatText('justifyCenter')" title="Centrer">
+                    <i class="fas fa-align-center"></i>
+                </button>
+                <button class="word-btn" onclick="formatText('justifyRight')" title="Aligner à droite">
+                    <i class="fas fa-align-right"></i>
+                </button>
+                <button class="word-btn" onclick="formatText('justifyFull')" title="Justifier">
+                    <i class="fas fa-align-justify"></i>
+                </button>
+            </div>
+            
+            <!-- Groupe Listes -->
+            <div class="toolbar-group">
+                <button class="word-btn" onclick="insertList('ul')" title="Liste à puces">
+                    <i class="fas fa-list-ul"></i>
+                </button>
+                <button class="word-btn" onclick="insertList('ol')" title="Liste numérotée">
+                    <i class="fas fa-list-ol"></i>
+                </button>
+                <button class="word-btn" onclick="formatText('outdent')" title="Diminuer le retrait">
+                    <i class="fas fa-outdent"></i>
+                </button>
+                <button class="word-btn" onclick="formatText('indent')" title="Augmenter le retrait">
+                    <i class="fas fa-indent"></i>
+                </button>
+            </div>
+            
+            <!-- Groupe Styles -->
+            <div class="toolbar-group">
+                <button class="word-btn" onclick="applyStyle('h1')" title="Titre 1">
+                    <span style="font-weight:bold;">T1</span>
+                </button>
+                <button class="word-btn" onclick="applyStyle('h2')" title="Titre 2">
+                    <span style="font-weight:bold;">T2</span>
+                </button>
+                <button class="word-btn" onclick="applyStyle('h3')" title="Titre 3">
+                    <span style="font-weight:bold;">T3</span>
+                </button>
+                <button class="word-btn" onclick="applyStyle('quote')" title="Citation">
+                    <i class="fas fa-quote-right"></i>
+                </button>
+                <button class="word-btn" onclick="applyStyle('code')" title="Code">
+                    <i class="fas fa-code"></i>
+                </button>
+            </div>
+            
+            <!-- Groupe Plus d'options -->
+            <div class="toolbar-group more-options-btn">
+                <button class="word-btn" onclick="toggleMoreOptions()" title="Plus d'options">
+                    <i class="fas fa-ellipsis-h"></i>
+                </button>
+                <div class="more-options-menu" id="moreOptionsMenu">
+                    <div class="more-options-item" onclick="clearFormatting()">
+                        <i class="fas fa-eraser"></i> Effacer la mise en forme
+                    </div>
+                    <div class="more-options-item" onclick="toggleFormatPainter()">
+                        <i class="fas fa-brush"></i> Reproduire la mise en forme
+                    </div>
+                    <div class="more-options-item">
+                        <i class="fas fa-text-height"></i> Interligne:
+                        <select class="line-spacing-input" onchange="changeLineSpacing(this.value)">
+                            <option value="1">1.0</option>
+                            <option value="1.15">1.15</option>
+                            <option value="1.5" selected>1.5</option>
+                            <option value="2">2.0</option>
+                            <option value="2.5">2.5</option>
+                            <option value="3">3.0</option>
+                        </select>
+                    </div>
+                    <div class="more-options-item" onclick="insertTable()">
+                        <i class="fas fa-table"></i> Insérer un tableau
+                    </div>
+                    <div class="more-options-item" onclick="insertImage()">
+                        <i class="fas fa-image"></i> Insérer une image
+                    </div>
+                    <div class="more-options-item" onclick="insertLink()">
+                        <i class="fas fa-link"></i> Insérer un lien
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Groupe Annuler/Refaire -->
+            <div class="toolbar-group">
+                <button class="word-btn" onclick="undoAction()" title="Annuler (Ctrl+Z)">
+                    <i class="fas fa-undo"></i>
+                </button>
+                <button class="word-btn" onclick="redoAction()" title="Refaire (Ctrl+Y)">
+                    <i class="fas fa-redo"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Statistiques d'édition -->
+        <div class="editor-stats" id="editorStats" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="badge bg-light text-dark me-2">
+                        <i class="fas fa-font"></i> <span id="wordCount">0</span> mots
+                    </span>
+                    <span class="badge bg-light text-dark">
+                        <i class="fas fa-clock"></i> <span id="readingTime">0</span> min
+                    </span>
+                </div>
+                <div class="text-muted small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <span id="lastSave">Dernière sauvegarde: Jamais</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- PAGE DE GARDE -->
+        <div class="cover-page-section" id="coverPageSection">
+            <div class="cover-page-editable" id="coverPageEditable">
+                <!-- Contenu éditable de la page de garde -->
+                <div class="cover-page-header">
+                    <div class="cover-university cover-editable-field" contenteditable="true" data-field="university">
+                        UNIVERSITÉ MOHAMMED PREMIER
+                    </div>
+                    <div class="cover-school cover-editable-field" contenteditable="true" data-field="school">
+                        École Nationale des Sciences Appliquées - Oujda
+                    </div>
+                    
+                    <div class="cover-field cover-editable-field" contenteditable="true" data-field="filiere">
+                        FILIÈRE : {{ report.student.filiere|default('GÉNIE INFORMATIQUE')|upper }}
+                    </div>
+                </div>
+                
+                <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                    <div class="cover-title-main cover-editable-field" contenteditable="true" data-field="title">
+                        RAPPORT DE STAGE DE FIN D'ÉTUDES
+                    </div>
+                    
+                    <div class="cover-project-title cover-editable-field" contenteditable="true" data-field="project_title">
+                        {{ report.student.project_title|default('TITRE DU PROJET DE STAGE') }}
+                    </div>
+                </div>
+                
+                <div class="cover-info" style="margin-top: 3rem; text-align: center; line-height: 1.8;">
+                    <div class="cover-info-item">
+                        <strong>Présenté par :</strong> 
+                        <span class="cover-editable-field" contenteditable="true" data-field="student_name">
+                            {{ report.student.full_name|default('NOM Prénom')|upper }}
+                        </span>
+                    </div>
+                    
+                    <div class="cover-info-item">
+                        <strong>Encadré par :</strong> 
+                        <span class="cover-editable-field" contenteditable="true" data-field="academic_supervisor">
+                            {{ report.student.academic_supervisor|default('Dr. NOM Prénom') }}
+                        </span> (ENSAO)
+                    </div>
+                    
+                    <div class="cover-info-item">
+                        <strong>Entreprise :</strong> 
+                        <span class="cover-editable-field" contenteditable="true" data-field="company_name">
+                            {{ report.company.name|default('Entreprise') }}
+                        </span>
+                    </div>
+                    
+                    <div class="cover-info-item">
+                        <strong>Durée :</strong> 
+                        <span class="cover-editable-field" contenteditable="true" data-field="duration">
+                            {{ report.student.duration|default('2 mois') }}
+                        </span>
+                    </div>
+                    
+                    <div class="cover-info-item">
+                        <strong>Année universitaire :</strong> 
+                        <span class="cover-editable-field" contenteditable="true" data-field="academic_year">
+                            {{ report.student.academic_year|default('2024-2025') }}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="cover-footer" style="margin-top: 4rem; font-style: italic; color: #7F8C8D;">
+                    <div class="cover-editable-field" contenteditable="true" data-field="date">
+                        Fait à Oujda, le {{ current_date|default('JJ/MM/AAAA') }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Éditeur pour les sections régulières -->
+        <div class="section-content-editor" 
+             id="editorArea" 
+             contenteditable="true"
+             style="display: none;"
+             oninput="updateWordCount()">
+            <!-- Contenu chargé dynamiquement -->
+        </div>
+        
+        <!-- Contrôles de navigation SIMPLES -->
+        <div class="editor-controls">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-secondary" onclick="previousSection()">
+                        <i class="fas fa-arrow-left me-1"></i>Précédent
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="nextSection()">
+                        Suivant <i class="fas fa-arrow-right ms-1"></i>
+                    </button>
+                </div>
+                
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary" onclick="saveCurrent()">
+                        <i class="fas fa-save me-1"></i>Sauvegarder
+                    </button>
+                    <button class="btn btn-success" onclick="downloadReport()">
+                        <i class="fas fa-file-download me-1"></i>Télécharger PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal d'insertion de tableau -->
+<div class="modal fade" id="tableModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Insérer un tableau</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Nombre de colonnes:</label>
+                    <input type="number" class="form-control" id="tableCols" value="3" min="1" max="10">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Nombre de lignes:</label>
+                    <input type="number" class="form-control" id="tableRows" value="3" min="1" max="20">
+                </div>
+                <div class="mb-3">
+                    <label class="form-check-label">
+                        <input type="checkbox" class="form-check-input" id="tableHeader" checked>
+                        Première ligne comme en-tête
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="createTable()">Insérer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal d'insertion d'image -->
+<div class="modal fade" id="imageModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Insérer une image</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">URL de l'image:</label>
+                    <input type="url" class="form-control" id="imageUrl" placeholder="https://example.com/image.jpg">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Ou télécharger une image:</label>
+                    <input type="file" class="form-control" id="imageUpload" accept="image/*">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Largeur (px):</label>
+                    <input type="number" class="form-control" id="imageWidth" value="400" min="50" max="800">
+                </div>
+                <div class="mb-3">
+                    <label class="form-check-label">
+                        <input type="checkbox" class="form-check-input" id="imageCenter" checked>
+                        Centrer l'image
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="insertImageFromUrl()">Insérer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal d'insertion de lien -->
+<div class="modal fade" id="linkModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Insérer un lien hypertexte</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Texte du lien:</label>
+                    <input type="text" class="form-control" id="linkText" placeholder="Texte à afficher">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">URL:</label>
+                    <input type="url" class="form-control" id="linkUrl" placeholder="https://example.com">
+                </div>
+                <div class="mb-3">
+                    <label class="form-check-label">
+                        <input type="checkbox" class="form-check-input" id="linkNewTab" checked>
+                        Ouvrir dans un nouvel onglet
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="insertHyperlink()">Insérer</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ==================== VARIABLES GLOBALES ====================
+let currentSection = null;
+let sectionsData = {{ report.sections|tojson|safe }};
+let structure = {{ structure|tojson|safe }};
+let currentSectionIndex = -1;
+let sectionIds = Object.keys(structure);
+let isViewingCoverPage = true;
+
+// Données de la page de garde
+let coverPageData = {
+    university: "UNIVERSITÉ MOHAMMED PREMIER",
+    school: "École Nationale des Sciences Appliquées - Oujda",
+    filiere: "{{ report.student.filiere|default('GÉNIE INFORMATIQUE')|upper }}",
+    title: "RAPPORT DE STAGE DE FIN D'ÉTUDES",
+    project_title: "{{ report.student.project_title|default('TITRE DU PROJET DE STAGE') }}",
+    student_name: "{{ report.student.full_name|default('NOM Prénom')|upper }}",
+    academic_supervisor: "{{ report.student.academic_supervisor|default('Dr. NOM Prénom') }}",
+    company_supervisor: "{{ report.company.supervisor|default('M. NOM Prénom') }}",
+    company_name: "{{ report.company.name|default('Entreprise') }}",
+    duration: "{{ report.student.duration|default('2 mois') }}",
+    academic_year: "{{ report.student.academic_year|default('2024-2025') }}",
+    date: `Fait à Oujda, le ${new Date().toLocaleDateString('fr-FR')}`
+};
+
+// ==================== INITIALISATION ====================
+$(document).ready(function() {
+    console.log('🚀 Éditeur initialisé');
+    
+    // Initialiser la page de garde
+    initCoverPage();
+    
+    // Charger la page de garde par défaut
+    loadCoverPage();
+    
+    // Événements clavier
+    $(document).on('keydown', function(e) {
+        handleKeyDown(e);
+    });
+    
+    // Fermer les palettes de couleurs quand on clique ailleurs
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('.color-picker-wrapper').length) {
+            $('.color-palette').removeClass('active');
+        }
+        if (!$(e.target).closest('.more-options-btn').length) {
+            $('#moreOptionsMenu').removeClass('active');
+        }
+    });
+});
+
+// ==================== FONCTIONS DE BASE ====================
+
+// Initialiser la page de garde
+function initCoverPage() {
+    console.log('📄 Initialisation page de garde');
+    
+    // Remplir les champs avec les données
+    $('.cover-editable-field').each(function() {
+        const field = $(this).data('field');
+        if (coverPageData[field]) {
+            $(this).text(coverPageData[field]);
+        }
+        
+        // Ajouter l'événement input
+        $(this).on('input', function() {
+            const fieldName = $(this).data('field');
+            coverPageData[fieldName] = $(this).text().trim();
+            updateCoverWordCount();
+        });
+    });
+    
+    updateCoverWordCount();
+}
+
+// Charger la page de garde
+function loadCoverPage() {
+    console.log('🔍 Chargement page de garde');
+    
+    isViewingCoverPage = true;
+    currentSection = null;
+    currentSectionIndex = -1;
+    
+    // Afficher/masquer les éléments
+    $('#coverPageSection').show();
+    $('#editorArea').hide();
+    $('#editorStats').hide();
+    
+    // Mettre à jour le titre
+    $('#currentSectionTitle').html('<i class="fas fa-file-contract me-2"></i> PAGE DE GARDE');
+    $('#currentSectionDescription').text('Page titre officielle - Modifiable en direct');
+    
+    // Mettre à jour la sélection dans la sidebar
+    $('.section-card').removeClass('active');
+    $('#coverPageCard').addClass('active');
+    
+    updateCoverWordCount();
+}
+
+// Charger une section régulière
+function loadSection(sectionId) {
+    console.log('📂 Chargement section:', sectionId);
+    
+    // Sauvegarder avant de changer
+    if (isViewingCoverPage) {
+        saveCoverPage(false);
+    } else if (currentSection) {
+        saveCurrentSection(false);
+    }
+    
+    isViewingCoverPage = false;
+    currentSection = sectionId;
+    currentSectionIndex = sectionIds.indexOf(sectionId);
+    
+    // Afficher/masquer les éléments
+    $('#coverPageSection').hide();
+    $('#editorArea').show();
+    $('#editorStats').show();
+    
+    // Mettre à jour le titre
+    const sectionInfo = structure[sectionId];
+    $('#currentSectionTitle').text(sectionInfo.title);
+    $('#currentSectionDescription').text(sectionInfo.description);
+    
+    // Charger le contenu
+    let content = sectionsData[sectionId] || getDefaultContent(sectionId, sectionInfo);
+    $('#editorArea').html(content);
+    
+    // Mettre à jour la sélection dans la sidebar
+    $('.section-card').removeClass('active');
+    $(`#card-${sectionId}`).addClass('active');
+    
+    // Activer l'édition
+    $('#editorArea').attr('contenteditable', 'true');
+    
+    // Mettre à jour les statistiques
+    updateWordCount();
+    updateLastSaveTime();
+}
+
+// ==================== NAVIGATION ====================
+
+function previousSection() {
+    console.log('⬅️ Section précédente');
+    
+    if (isViewingCoverPage) {
+        // De la page de garde vers la dernière section
+        if (sectionIds.length > 0) {
+            loadSection(sectionIds[sectionIds.length - 1]);
+        }
+    } else if (currentSectionIndex > 0) {
+        // Vers la section précédente
+        loadSection(sectionIds[currentSectionIndex - 1]);
+    } else {
+        // De la première section vers la page de garde
+        loadCoverPage();
+    }
+}
+
+function nextSection() {
+    console.log('➡️ Section suivante');
+    
+    if (isViewingCoverPage) {
+        // De la page de garde vers la première section
+        if (sectionIds.length > 0) {
+            loadSection(sectionIds[0]);
+        }
+    } else if (currentSectionIndex < sectionIds.length - 1) {
+        // Vers la section suivante
+        loadSection(sectionIds[currentSectionIndex + 1]);
+    } else {
+        // De la dernière section vers la page de garde
+        loadCoverPage();
+    }
+}
+
+// ==================== BARRE D'OUTILS WORD ====================
+
+function formatText(command) {
+    if (isViewingCoverPage) {
+        document.execCommand(command, false, null);
+        updateCoverWordCount();
+    } else {
+        document.execCommand(command, false, null);
+        updateWordCount();
+    }
+}
+
+function changeFont(font) {
+    document.execCommand('fontName', false, font);
+}
+
+function changeFontSize(size) {
+    document.execCommand('fontSize', false, size);
+}
+
+function toggleColorPalette(type) {
+    $('.color-palette').removeClass('active');
+    $(`#${type}ColorPalette`).toggleClass('active');
+}
+
+function changeTextColor(color) {
+    document.execCommand('foreColor', false, color);
+    $('#textColorIndicator').css('background-color', color);
+    $('#textColorPalette').removeClass('active');
+}
+
+function applyCustomTextColor() {
+    const color = $('#customTextColor').val();
+    changeTextColor(color);
+}
+
+function highlightText(color) {
+    document.execCommand('hiliteColor', false, color);
+    $('#highlightColorIndicator').css('background-color', color);
+    $('#highlightColorPalette').removeClass('active');
+}
+
+function applyCustomHighlightColor() {
+    const color = $('#customHighlightColor').val();
+    highlightText(color);
+}
+
+function insertList(type) {
+    const command = type === 'ul' ? 'insertUnorderedList' : 'insertOrderedList';
+    formatText(command);
+}
+
+function applyStyle(style) {
+    if (isViewingCoverPage) {
+        // Appliquer le style à la page de garde
+        const selection = window.getSelection();
+        
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const selectedText = range.toString();
+            
+            if (selectedText) {
+                let styledElement;
+                
+                switch(style) {
+                    case 'h1':
+                        styledElement = document.createElement('h1');
+                        styledElement.className = 'editor-h1';
+                        break;
+                    case 'h2':
+                        styledElement = document.createElement('h2');
+                        styledElement.className = 'editor-h2';
+                        break;
+                    case 'h3':
+                        styledElement = document.createElement('h3');
+                        styledElement.className = 'editor-h3';
+                        break;
+                    case 'quote':
+                        styledElement = document.createElement('blockquote');
+                        styledElement.className = 'editor-quote';
+                        break;
+                    case 'code':
+                        styledElement = document.createElement('code');
+                        styledElement.className = 'editor-code';
+                        break;
+                }
+                
+                if (styledElement) {
+                    styledElement.textContent = selectedText;
+                    range.deleteContents();
+                    range.insertNode(styledElement);
+                }
+            }
+        }
+        updateCoverWordCount();
+    } else {
+        // Pour les sections régulières
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const selectedText = range.toString();
+            
+            if (selectedText) {
+                let styledElement;
+                
+                switch(style) {
+                    case 'h1':
+                        styledElement = document.createElement('h1');
+                        styledElement.className = 'editor-h1';
+                        break;
+                    case 'h2':
+                        styledElement = document.createElement('h2');
+                        styledElement.className = 'editor-h2';
+                        break;
+                    case 'h3':
+                        styledElement = document.createElement('h3');
+                        styledElement.className = 'editor-h3';
+                        break;
+                    case 'quote':
+                        styledElement = document.createElement('blockquote');
+                        styledElement.className = 'editor-quote';
+                        break;
+                    case 'code':
+                        styledElement = document.createElement('code');
+                        styledElement.className = 'editor-code';
+                        break;
+                }
+                
+                if (styledElement) {
+                    styledElement.textContent = selectedText;
+                    range.deleteContents();
+                    range.insertNode(styledElement);
+                }
+            }
+        }
+        updateWordCount();
+    }
+}
+
+function undoAction() {
+    document.execCommand('undo');
+    if (isViewingCoverPage) {
+        updateCoverWordCount();
+    } else {
+        updateWordCount();
+    }
+}
+
+function redoAction() {
+    document.execCommand('redo');
+    if (isViewingCoverPage) {
+        updateCoverWordCount();
+    } else {
+        updateWordCount();
+    }
+}
+
+function toggleMoreOptions() {
+    $('#moreOptionsMenu').toggleClass('active');
+}
+
+function clearFormatting() {
+    document.execCommand('removeFormat', false, null);
+    
+    if (isViewingCoverPage) {
+        updateCoverWordCount();
+    } else {
+        updateWordCount();
+    }
+}
+
+function changeLineSpacing(value) {
+    if (isViewingCoverPage) {
+        $('#coverPageEditable').css('line-height', value);
+    } else {
+        $('#editorArea').css('line-height', value);
+    }
+}
+
+// ==================== SAUVEGARDE ====================
+
+function saveCurrent() {
+    if (isViewingCoverPage) {
+        saveCoverPage();
+    } else {
+        saveCurrentSection();
+    }
+}
+
+function saveCoverPage(showAlert = true) {
+    console.log('💾 Sauvegarde page de garde');
+    
+    // Collecter les données
+    const data = {};
+    $('.cover-editable-field').each(function() {
+        const field = $(this).data('field');
+        data[field] = $(this).text().trim();
+    });
+    
+    // Envoyer au serveur
+    $.ajax({
+        url: `/api/update-cover-page/{{ report_id }}`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(response) {
+            if (response.success && showAlert) {
+                showNotification('Page de garde sauvegardée', 'success');
+            }
+            updateCoverWordCount();
+            updateLastSaveTime();
+        },
+        error: function() {
+            if (showAlert) {
+                showNotification('Erreur lors de la sauvegarde', 'error');
+            }
+        }
+    });
+}
+
+function saveCurrentSection(showAlert = true) {
+    if (!currentSection) return;
+    
+    console.log('💾 Sauvegarde section:', currentSection);
+    
+    const content = $('#editorArea').html();
+    sectionsData[currentSection] = content;
+    
+    // Envoyer au serveur
+    $.ajax({
+        url: `/api/update-single-section/{{ report_id }}`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            section_name: currentSection,
+            content: content
+        }),
+        success: function(response) {
+            if (response.success && showAlert) {
+                showNotification('Section sauvegardée', 'success');
+            }
+            updateWordCount();
+            updateLastSaveTime();
+        },
+        error: function() {
+            if (showAlert) {
+                showNotification('Erreur lors de la sauvegarde', 'error');
+            }
+        }
+    });
+}
+
+// ==================== COMPTAGE DE MOTS ====================
+
+function updateWordCount() {
+    if (!currentSection || isViewingCoverPage) return;
+    
+    const text = $('#editorArea').text();
+    const words = text.trim().split(/\s+/).filter(word => word.length > 0).length;
+    
+    // Mettre à jour la sidebar
+    $(`#stats-${currentSection}`).text(words);
+    
+    // Mettre à jour les stats d'édition
+    $('#wordCount').text(words);
+    $('#readingTime').text(Math.ceil(words / 200));
+}
+
+function updateCoverWordCount() {
+    let totalWords = 0;
+    $('.cover-editable-field').each(function() {
+        const text = $(this).text();
+        const words = text.trim().split(/\s+/).filter(word => word.length > 0).length;
+        totalWords += words;
+    });
+    $('#stats-cover').text(totalWords);
+}
+
+// ==================== INSERTION DE TABLEAU, IMAGE, LIEN ====================
+
+function insertTable() {
+    $('#tableModal').modal('show');
+}
+
+function createTable() {
+    const cols = parseInt($('#tableCols').val());
+    const rows = parseInt($('#tableRows').val());
+    const hasHeader = $('#tableHeader').is(':checked');
+    
+    let tableHtml = '<table class="table table-bordered" style="width: 100%; border-collapse: collapse;">';
+    
+    if (hasHeader) {
+        tableHtml += '<thead><tr>';
+        for (let i = 0; i < cols; i++) {
+            tableHtml += `<th style="border: 1px solid #dee2e6; padding: 8px; background: #f8f9fa;">Titre ${i+1}</th>`;
+        }
+        tableHtml += '</tr></thead>';
+    }
+    
+    tableHtml += '<tbody>';
+    const startRow = hasHeader ? 1 : 0;
+    for (let i = startRow; i < rows; i++) {
+        tableHtml += '<tr>';
+        for (let j = 0; j < cols; j++) {
+            tableHtml += `<td style="border: 1px solid #dee2e6; padding: 8px;">Cellule</td>`;
+        }
+        tableHtml += '</tr>';
+    }
+    tableHtml += '</tbody></table>';
+    
+    document.execCommand('insertHTML', false, tableHtml);
+    
+    $('#tableModal').modal('hide');
+    
+    if (isViewingCoverPage) {
+        updateCoverWordCount();
+    } else {
+        updateWordCount();
+    }
+}
+
+function insertImage() {
+    $('#imageModal').modal('show');
+}
+
+function insertImageFromUrl() {
+    const url = $('#imageUrl').val();
+    const width = $('#imageWidth').val();
+    const center = $('#imageCenter').is(':checked');
+    
+    if (url) {
+        let imgHtml = `<img src="${url}" style="max-width: 100%; height: auto; width: ${width}px;" alt="Image">`;
+        if (center) {
+            imgHtml = `<div style="text-align: center;">${imgHtml}</div>`;
+        }
+        
+        document.execCommand('insertHTML', false, imgHtml);
+        
+        $('#imageModal').modal('hide');
+        
+        if (isViewingCoverPage) {
+            updateCoverWordCount();
+        } else {
+            updateWordCount();
+        }
+    }
+}
+
+function insertLink() {
+    $('#linkModal').modal('show');
+}
+
+function insertHyperlink() {
+    const text = $('#linkText').val();
+    const url = $('#linkUrl').val();
+    const newTab = $('#linkNewTab').is(':checked');
+    
+    if (url) {
+        const target = newTab ? ' target="_blank"' : '';
+        const linkHtml = `<a href="${url}"${target}>${text || url}</a>`;
+        
+        document.execCommand('insertHTML', false, linkHtml);
+        
+        $('#linkModal').modal('hide');
+        
+        if (isViewingCoverPage) {
+            updateCoverWordCount();
+        } else {
+            updateWordCount();
+        }
+    }
+}
+
+// ==================== UTILITAIRES ====================
+
+function updateLastSaveTime() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('fr-FR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+    $('#lastSave').text(`Dernière sauvegarde: ${timeStr}`);
+}
+
+function downloadReport() {
+    // Sauvegarder d'abord
+    if (isViewingCoverPage) {
+        saveCoverPage(false);
+    } else if (currentSection) {
+        saveCurrentSection(false);
+    }
+    
+    showNotification('Téléchargement en cours...', 'info');
+    window.location.href = `/api/download-report-pdf/{{ report_id }}`;
+}
+
+function showNotification(message, type = 'info') {
+    const alertClass = {
+        'success': 'alert-success',
+        'error': 'alert-danger',
+        'info': 'alert-info'
+    }[type];
+    
+    const icon = {
+        'success': 'check-circle',
+        'error': 'exclamation-circle',
+        'info': 'info-circle'
+    }[type];
+    
+    const alert = $(`
+        <div class="alert ${alertClass} alert-dismissible fade show position-fixed" 
+             style="top: 20px; right: 20px; z-index: 9999; min-width: 300px;">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-${icon} me-2"></i>
+                <div>${message}</div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `);
+    
+    $('body').append(alert);
+    
+    setTimeout(() => {
+        alert.alert('close');
+    }, 3000);
+}
+
+function getDefaultContent(sectionId, sectionInfo) {
+    const defaults = {
+        'remerciements': `<h2 class="editor-h1">REMERCIEMENTS</h2>
+<p>Je tiens à exprimer ma gratitude à toutes les personnes qui ont contribué à la réalisation de ce travail...</p>`,
+        
+        'resume': `<h2 class="editor-h1">RÉSUMÉ</h2>
+<p>Ce rapport présente les travaux réalisés lors de mon stage...</p>`,
+        
+        'introduction': `<h2 class="editor-h1">INTRODUCTION</h2>
+<p>Cette introduction présente le contexte, la problématique et les objectifs du stage...</p>`
+    };
+    
+    return defaults[sectionId] || `<p>Commencez à rédiger votre section ici...</p>`;
+}
+
+function handleKeyDown(e) {
+    // Ctrl+S pour sauvegarder
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        saveCurrent();
+    }
+    // Ctrl+Z pour annuler
+    if (e.ctrlKey && e.key === 'z') {
+        e.preventDefault();
+        undoAction();
+    }
+    // Ctrl+Y pour refaire
+    if (e.ctrlKey && e.key === 'y') {
+        e.preventDefault();
+        redoAction();
+    }
+}
+</script>
+{% endblock %}

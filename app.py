@@ -1,0 +1,1635 @@
+"""
+Application Flask principale - Générateur Intelligent de Rapports Académiques
+"""
+
+from flask import Flask, render_template, request, jsonify, send_file, session, flash, redirect, url_for
+from flask_cors import CORS
+from datetime import datetime, timedelta
+import os
+import json
+import uuid
+from functools import wraps
+import traceback
+import time
+from io import BytesIO
+
+# Importer les modules backend
+from backend.ai_generator import AIGenerator, AcademicPromptGenerator
+from backend.stage_generator import StageReportGenerator
+from backend.pdf_generator import PDFGenerator, generate_quick_pdf
+from backend.word_generator import WordGenerator, generate_quick_docx
+
+# Importer la configuration prompts
+from prompts.academic_prompts import ACADEMIC_PROMPTS_CONFIG, generate_section_prompt
+
+# Configuration
+from config import config, Config
+
+# Initialiser l'application Flask
+app = Flask(__name__, 
+           template_folder='templates',
+           static_folder='static')
+
+# Charger la configuration
+app.config.from_object(config['development'])
+
+# Initialiser CORS
+CORS(app, supports_credentials=True)
+
+# Initialiser la configuration
+Config.init_app(app)
+
+# Stockage en mémoire
+reports_store = {}
+sessions_store = {}
+style_analyses_store = {}
+
+# ============================================================================
+# FONCTIONS UTILITAIRES
+# ============================================================================
+
+def create_session() -> str:
+    """Crée une nouvelle session"""
+    session_id = str(uuid.uuid4())
+    sessions_store[session_id] = {
+        'created_at': datetime.now().isoformat(),
+        'last_activity': datetime.now().isoformat(),
+        'data': {},
+        'report_id': None,
+        'style_analysis': None
+    }
+    print(f"✅ Session créée: {session_id}")
+    return session_id
+
+def get_session_data(session_id: str) -> dict:
+    """Récupère les données d'une session"""
+    if session_id in sessions_store:
+        sessions_store[session_id]['last_activity'] = datetime.now().isoformat()
+        return sessions_store[session_id]['data']
+    return {}
+
+def update_session_data(session_id: str, data: dict):
+    """Met à jour les données d'une session"""
+    if session_id in sessions_store:
+        sessions_store[session_id]['data'].update(data)
+        sessions_store[session_id]['last_activity'] = datetime.now().isoformat()
+
+def require_session(f):
+    """Décorateur pour vérifier la présence d'une session"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        session_id = request.args.get('session_id') or \
+                    request.form.get('session_id') or \
+                    (request.json.get('session_id') if request.is_json else None)
+        
+        if not session_id or session_id not in sessions_store:
+            return jsonify({
+                'success': False, 
+                'error': 'Session invalide ou expirée',
+                'code': 'SESSION_INVALID'
+            }), 401
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
+def cleanup_old_sessions():
+    """Nettoie les anciennes sessions"""
+    now = datetime.now()
+    expired = []
+    
+    for session_id, data in sessions_store.items():
+        last_activity = datetime.fromisoformat(data['last_activity'])
+        if (now - last_activity) > timedelta(hours=24):
+            expired.append(session_id)
+    
+    for session_id in expired:
+        del sessions_store[session_id]
+        print(f"🗑️ Session nettoyée: {session_id}")
+
+def extract_sections_from_html(html_content):
+    """Extrait les sections du HTML de l'éditeur.
+    Supporte les deux classes utilisées: 'section' et 'report-section'.
+    """
+    from bs4 import BeautifulSoup
+    
+    sections = {}
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Chercher d'abord les divs avec class='report-section' (format éditeur complet)
+    for section_div in soup.find_all('div', class_='report-section'):
+        section_name = section_div.get('data-section', '')
+        content_div = section_div.find('div', class_='section-content')
+        if section_name and content_div:
+            sections[section_name] = str(content_div)
+    
+    # Puis les divs avec class='section' (format éditeur simple)
+    for section_div in soup.find_all('div', class_='section'):
+        section_name = section_div.get('data-section', '')
+        if section_name and section_name not in sections:
+            sections[section_name] = str(section_div)
+    
+    return sections
+
+def generate_pdf_buffer(report_data):
+    """
+    Génère un PDF complet en mémoire et retourne un BytesIO.
+    C'est la SEULE fonction utilisée pour créer des PDFs à télécharger.
+    """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+    from bs4 import BeautifulSoup
+
+    buffer = BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=2.5*cm,
+        leftMargin=2.5*cm,
+        topMargin=2.5*cm,
+        bottomMargin=2.5*cm
+    )
+
+    story = []
+    styles = getSampleStyleSheet()
+
+    student = report_data.get('student', {})
+    company = report_data.get('company', {})
+
+    # ========== PAGE DE GARDE ==========
+    story.append(Spacer(1, 4*cm))
+    story.append(Paragraph("UNIVERSITÉ MOHAMMED PREMIER",
+        ParagraphStyle('CoverUni', parent=styles['Heading1'], fontSize=16, alignment=TA_CENTER,
+                       textColor=colors.HexColor('#2C3E50'), spaceAfter=10)))
+    story.append(Paragraph("École Nationale des Sciences Appliquées - Oujda",
+        ParagraphStyle('CoverEcole', parent=styles['Heading2'], fontSize=13, alignment=TA_CENTER,
+                       textColor=colors.HexColor('#3498DB'), spaceAfter=5)))
+    story.append(Spacer(1, 1*cm))
+    story.append(Paragraph(f"<b>FILIÈRE :</b> {student.get('filiere', 'Génie Informatique').upper()}",
+        ParagraphStyle('CoverFiliere', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER, spaceAfter=20)))
+    story.append(Spacer(1, 1*cm))
+    story.append(Paragraph("RAPPORT DE STAGE DE FIN D'ÉTUDES",
+        ParagraphStyle('CoverRapport', parent=styles['Heading1'], fontSize=18, alignment=TA_CENTER,
+                       textColor=colors.HexColor('#1A5276'), spaceAfter=20)))
+    story.append(Paragraph(f"<b>{student.get('project_title', 'Titre du projet')}</b>",
+        ParagraphStyle('CoverTitre', parent=styles['Heading2'], fontSize=14, alignment=TA_CENTER,
+                       textColor=colors.HexColor('#2980B9'), spaceAfter=30,
+                       borderWidth=1, borderColor=colors.HexColor('#2980B9'), borderPadding=10,
+                       backColor=colors.HexColor('#F0F7FC'))))
+    story.append(Spacer(1, 2*cm))
+
+    info_style = ParagraphStyle('CoverInfo', parent=styles['Normal'], fontSize=11, alignment=TA_CENTER, spaceAfter=8)
+    story.append(Paragraph(f"<b>Présenté par :</b> {student.get('full_name', 'NOM Prénom')}", info_style))
+    story.append(Paragraph(f"<b>Encadré par :</b> {student.get('academic_supervisor', 'Dr. NOM Prénom')} (ENSAO)", info_style))
+    story.append(Paragraph(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{company.get('supervisor', 'M. NOM Prénom')} ({company.get('name', 'Entreprise')})", info_style))
+    story.append(Paragraph(f"<b>Entreprise :</b> {company.get('name', 'Entreprise')}", info_style))
+    story.append(Paragraph(f"<b>Durée :</b> {student.get('duration', '2 mois')}", info_style))
+    story.append(Paragraph(f"<b>Année universitaire :</b> {student.get('academic_year', '2024-2025')}", info_style))
+    story.append(PageBreak())
+
+    # ========== SECTIONS DU RAPPORT ==========
+    section_titles = {
+        'remerciements': 'REMERCIEMENTS',
+        'resume': 'RÉSUMÉ',
+        'introduction': 'INTRODUCTION GÉNÉRALE',
+        'entreprise': "PRÉSENTATION DE L'ENTREPRISE",
+        'methodologie': 'MÉTHODOLOGIE ADOPTÉE',
+        'conclusion': 'CONCLUSION ET PERSPECTIVES'
+    }
+
+    for section_key, section_content in report_data.get('sections', {}).items():
+        if not section_content:
+            continue
+
+        # Titre de la section
+        title = section_titles.get(section_key, section_key.replace('_', ' ').upper())
+        story.append(Paragraph(title,
+            ParagraphStyle('ChapterTitle', parent=styles['Heading1'], fontSize=15, spaceBefore=10, spaceAfter=15,
+                           textColor=colors.HexColor('#2C3E50'),
+                           borderWidth=1, borderColor=colors.HexColor('#3498DB'), borderPadding=(5, 5, 5, 5))))
+        story.append(Spacer(1, 0.3*cm))
+
+        # Parser le HTML de la section
+        soup = BeautifulSoup(section_content, 'html.parser')
+
+        for tag in soup.find_all(['h2', 'h3', 'h4', 'p', 'li']):
+            text = tag.decode_contents().strip()
+            if not text:
+                continue
+
+            if tag.name == 'h2':
+                # On a déjà affiché le titre principal — on saute les h2 doublons
+                clean = tag.get_text(strip=True).upper()
+                if clean == title:
+                    continue
+                story.append(Paragraph(tag.decode_contents(),
+                    ParagraphStyle('H2', parent=styles['Heading2'], fontSize=13, spaceBefore=15, spaceAfter=10,
+                                   textColor=colors.HexColor('#2980B9'))))
+            elif tag.name == 'h3':
+                story.append(Paragraph(tag.decode_contents(),
+                    ParagraphStyle('H3', parent=styles['Heading3'], fontSize=12, spaceBefore=12, spaceAfter=8,
+                                   textColor=colors.HexColor('#34495E'))))
+            elif tag.name == 'h4':
+                story.append(Paragraph(f"<b>{tag.decode_contents()}</b>",
+                    ParagraphStyle('H4', parent=styles['Normal'], fontSize=11, spaceBefore=8, spaceAfter=6)))
+            elif tag.name == 'li':
+                story.append(Paragraph(f"• {tag.decode_contents()}",
+                    ParagraphStyle('ListItem', parent=styles['Normal'], fontSize=11, leftIndent=20, spaceAfter=4,
+                                   alignment=TA_JUSTIFY)))
+            elif tag.name == 'p':
+                story.append(Paragraph(tag.decode_contents(),
+                    ParagraphStyle('Body', parent=styles['Normal'], fontSize=11, spaceAfter=8, leading=14,
+                                   alignment=TA_JUSTIFY)))
+
+        story.append(Spacer(1, 0.8*cm))
+        story.append(PageBreak())
+
+    # Si le story est vide (ne devrait pas arriver), ajouter un placeholder
+    if len(story) == 0:
+        story.append(Paragraph("Rapport généré avec succès.", styles['Normal']))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+def generate_word_buffer(report_data):
+    """
+    Génère un DOCX complet en mémoire et retourne un BytesIO.
+    C'est la SEULE fonction utilisée pour créer des fichiers Word à télécharger.
+    """
+    from docx import Document
+    from docx.shared import Pt, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from bs4 import BeautifulSoup
+
+    doc = Document()
+
+    # Marges
+    for section in doc.sections:
+        section.top_margin = Cm(2.5)
+        section.bottom_margin = Cm(2.5)
+        section.left_margin = Cm(2.5)
+        section.right_margin = Cm(2.5)
+
+    student = report_data.get('student', {})
+    company = report_data.get('company', {})
+
+    # ========== PAGE DE GARDE ==========
+    for _ in range(5):
+        doc.add_paragraph()
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run("UNIVERSITÉ MOHAMMED PREMIER")
+    run.font.size = Pt(16)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(44, 62, 80)
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run("École Nationale des Sciences Appliquées - Oujda")
+    run.font.size = Pt(13)
+    run.font.color.rgb = RGBColor(52, 152, 219)
+
+    doc.add_paragraph()
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run(f"FILIÈRE : {student.get('filiere', 'Génie Informatique').upper()}")
+    run.font.size = Pt(12)
+
+    doc.add_paragraph()
+    doc.add_paragraph()
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run("RAPPORT DE STAGE DE FIN D'ÉTUDES")
+    run.font.size = Pt(18)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(26, 82, 118)
+
+    doc.add_paragraph()
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run(student.get('project_title', 'Titre du projet'))
+    run.font.size = Pt(14)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(41, 128, 185)
+
+    doc.add_paragraph()
+    doc.add_paragraph()
+
+    # Infos étudiant
+    for label, value in [
+        ("Présenté par :", student.get('full_name', '')),
+        ("Encadré par :", f"{student.get('academic_supervisor', '')} (ENSAO)"),
+        ("", f"{company.get('supervisor', '')} ({company.get('name', '')})"),
+        ("Entreprise :", company.get('name', '')),
+        ("Durée :", student.get('duration', '2 mois')),
+        ("Année universitaire :", student.get('academic_year', '2024-2025'))
+    ]:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if label:
+            run = p.add_run(f"{label} ")
+            run.font.size = Pt(11)
+            run.font.bold = True
+            run.font.name = 'Times New Roman'
+        run = p.add_run(value)
+        run.font.size = Pt(11)
+        run.font.name = 'Times New Roman'
+
+    doc.add_page_break()
+
+    # ========== SECTIONS ==========
+    section_titles = {
+        'remerciements': 'REMERCIEMENTS',
+        'resume': 'RÉSUMÉ',
+        'introduction': 'INTRODUCTION GÉNÉRALE',
+        'entreprise': "PRÉSENTATION DE L'ENTREPRISE",
+        'methodologie': 'MÉTHODOLOGIE ADOPTÉE',
+        'conclusion': 'CONCLUSION ET PERSPECTIVES'
+    }
+
+    for section_key, section_content in report_data.get('sections', {}).items():
+        if not section_content:
+            continue
+
+        title = section_titles.get(section_key, section_key.replace('_', ' ').upper())
+
+        # Titre de chapitre
+        heading = doc.add_heading(title, level=1)
+        for run in heading.runs:
+            run.font.color.rgb = RGBColor(44, 62, 80)
+            run.font.name = 'Times New Roman'
+
+        # Parser le contenu HTML
+        soup = BeautifulSoup(section_content, 'html.parser')
+
+        for tag in soup.find_all(['h2', 'h3', 'h4', 'p', 'li']):
+            text = tag.get_text(strip=True)
+            if not text:
+                continue
+
+            if tag.name == 'h2':
+                if text.upper() == title:
+                    continue  # éviter doublon titre
+                h = doc.add_heading(text, level=2)
+                for r in h.runs:
+                    r.font.name = 'Times New Roman'
+                    r.font.color.rgb = RGBColor(41, 128, 185)
+            elif tag.name == 'h3':
+                h = doc.add_heading(text, level=3)
+                for r in h.runs:
+                    r.font.name = 'Times New Roman'
+            elif tag.name == 'h4':
+                p = doc.add_paragraph()
+                run = p.add_run(text)
+                run.font.bold = True
+                run.font.size = Pt(11)
+                run.font.name = 'Times New Roman'
+            elif tag.name == 'li':
+                p = doc.add_paragraph()
+                p.paragraph_format.left_indent = Cm(1.25)
+                run = p.add_run(f"• {text}")
+                run.font.size = Pt(11)
+                run.font.name = 'Times New Roman'
+            elif tag.name == 'p':
+                p = doc.add_paragraph()
+                p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                # Gérer le texte avec gras/italique inline
+                for child in tag.children:
+                    if hasattr(child, 'name'):
+                        run = p.add_run(child.get_text())
+                        run.font.size = Pt(11)
+                        run.font.name = 'Times New Roman'
+                        if child.name == 'b' or child.name == 'strong':
+                            run.font.bold = True
+                        elif child.name == 'i' or child.name == 'em':
+                            run.font.italic = True
+                    else:
+                        run = p.add_run(str(child))
+                        run.font.size = Pt(11)
+                        run.font.name = 'Times New Roman'
+
+        doc.add_page_break()
+
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+# ============================================================================
+# ROUTES PRINCIPALES
+# ============================================================================
+
+@app.route('/')
+def index():
+    """Page d'accueil"""
+    cleanup_old_sessions()
+    return render_template('index.html', 
+                         app_name="Générateur Académique ENSAO",
+                         version="1.0.0",
+                         total_sessions=len(sessions_store))
+
+@app.route('/start')
+def start_report():
+    """Page de démarrage d'un nouveau rapport"""
+    session_id = create_session()
+    print(f"📝 Redirection vers formulaire avec session: {session_id}")
+    
+    return render_template('prompt_form.html', 
+                         session_id=session_id,
+                         app_name="Créer votre rapport")
+
+@app.route('/reference-style')
+def reference_style():
+    """Page pour l'analyse de style"""
+    session_id = request.args.get('session_id')
+    if not session_id:
+        session_id = create_session()
+    
+    return render_template('reference_form.html',
+                         session_id=session_id,
+                         app_name="Analyse de style")
+
+@app.route('/api/analyze-style', methods=['POST'])
+def analyze_style():
+    """API pour analyser le style d'écriture"""
+    try:
+        print("🔍 Début analyse de style...")
+        data = request.json
+        reference_text = data.get('reference_text', '')
+        student_info = data.get('student', {})
+        company_info = data.get('company', {})
+        
+        print(f"📝 Texte reçu: {len(reference_text)} caractères")
+        
+        if len(reference_text) < 100:
+            return jsonify({
+                'success': False,
+                'error': 'Le texte doit contenir au moins 100 caractères',
+                'min_length': 100,
+                'actual_length': len(reference_text)
+            }), 400
+        
+        session_id = data.get('session_id')
+        if not session_id or session_id not in sessions_store:
+            session_id = create_session()
+            print(f"🆕 Nouvelle session créée: {session_id}")
+        
+        print("🔧 Analyse du style en cours...")
+        prompt_generator = AcademicPromptGenerator(reference_text)
+        style_report = prompt_generator.get_style_report()
+        
+        sessions_store[session_id]['style_analysis'] = style_report
+        sessions_store[session_id]['data'].update({
+            'reference_text': reference_text,
+            'student_info': student_info,
+            'company_info': company_info
+        })
+        
+        print(f"✅ Analyse terminée pour session: {session_id}")
+        
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'style_report': style_report,
+            'academic_tips': prompt_generator.get_academic_tips(),
+            'message': 'Analyse de style complétée'
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur analyse: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/style-analysis-result')
+def style_analysis_result():
+    """Affiche les résultats d'analyse"""
+    session_id = request.args.get('session_id')
+    
+    if not session_id or session_id not in sessions_store:
+        flash('Session invalide', 'error')
+        return redirect(url_for('index'))
+    
+    style_analysis = sessions_store[session_id].get('style_analysis', {})
+    
+    return render_template('style_analysis.html',
+                         session_id=session_id,
+                         style_report=style_analysis,
+                         app_name="Résultats d'analyse")
+
+# ============================================================================
+# GÉNÉRATION DU RAPPORT
+# ============================================================================
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    """Génère un rapport et redirige vers l'éditeur"""
+    print("\n" + "="*60)
+    print("🎯 GÉNÉRATION RAPPORT + REDIRECTION VERS ÉDITEUR")
+    print("="*60)
+    
+    try:
+        data = request.json
+        
+        student_info = {
+            'full_name': data.get('full_name', 'Najoua Boughida'),
+            'filiere': data.get('filiere', 'Génie Informatique'),
+            'project_title': data.get('project_title', 'Développement web'),
+            'academic_supervisor': data.get('academic_supervisor', 'Dr. Najoua Boughida'),
+            'duration': data.get('duration', '2 mois'),
+            'academic_year': data.get('academic_year', '2024-2025')
+        }
+        
+        company_info = {
+            'name': data.get('company_name', 'SPLY'),
+            'supervisor': data.get('company_supervisor', 'Mme. Najoua Boughida'),
+            'sector': data.get('company_sector', 'Informatique'),
+            'location': data.get('company_location', 'Oujda'),
+            'description': data.get('company_description', '')
+        }
+        
+        project_info = {
+            'description': data.get('project_description', ''),
+            'technologies': data.get('technologies', 'Salesforce, Apex, Flow Builder, Einstein Bot, HTML/CSS, JavaScript'),
+            'tools': data.get('development_tools', 'VS Code, Git, JIRA, Salesforce Developer Console'),
+            'challenges': data.get('challenges', '')
+        }
+        
+        print(f"👤 Étudiant: {student_info['full_name']}")
+        print(f"📝 Projet: {student_info['project_title']}")
+        print(f"🏢 Entreprise: {company_info['name']}")
+        
+        session_id = create_session()
+        report_id = str(uuid.uuid4())
+        
+        # Sections du rapport
+        sections = {
+            'remerciements': f"""
+<h2>REMERCIEMENTS</h2>
+<p>Nous tenons tout d'abord à exprimer notre profonde gratitude à Dieu pour nous avoir donné la force et la patience de mener à bien ce travail.</p>
+<p>Nous adressons nos sincères remerciements à notre famille pour son soutien constant tout au long de notre parcours académique.</p>
+<p>Nous exprimons notre profonde reconnaissance à {student_info['academic_supervisor']}, notre encadrant académique à l'ENSA d'Oujda, pour ses précieux conseils, son encadrement et son soutien durant la réalisation de ce stage.</p>
+<p>Nous remercions chaleureusement {company_info['supervisor']}, notre encadrant professionnel au sein de l'entreprise {company_info['name']}, pour son accompagnement, sa disponibilité et ses orientations tout au long de ce stage.</p>
+<p>Nos remerciements vont également à l'ensemble du personnel de {company_info['name']} pour leur accueil chaleureux et leur collaboration durant cette période.</p>
+<p>Enfin, nous remercions tous ceux qui, de près ou de loin, ont contribué à la réalisation de ce travail.</p>
+<p><i>Fait à Oujda, le {datetime.now().strftime('%d %B %Y')}</i></p>
+<p><b>{student_info['full_name']}</b></p>
+            """,
+            
+            'resume': f"""
+<h2>RÉSUMÉ</h2>
+<p>Ce rapport présente le travail effectué lors du stage de fin d'études réalisé au sein de l'entreprise {company_info['name']}, spécialisée dans le secteur {company_info['sector']}. D'une durée de {student_info['duration']}, ce stage avait pour objectif principal {student_info['project_title'].lower()}.</p>
+<p>Le projet consistait à développer une solution informatique permettant d'optimiser les processus internes de l'entreprise. La méthodologie adoptée a suivi une approche structurée comprenant une phase d'analyse des besoins, une phase de conception, une phase de développement et une phase de tests.</p>
+<p>Les résultats obtenus démontrent l'efficacité de la solution mise en place, avec une amélioration notable de l'efficacité opérationnelle. Ce stage a permis de consolider les compétences techniques acquises durant la formation et d'acquérir une expérience professionnelle significative.</p>
+<p><b>Mots-clés :</b> Stage de fin d'études, {company_info['sector']}, Développement, Solution informatique, {student_info['filiere']}, ENSA Oujda.</p>
+
+<h3>ABSTRACT</h3>
+<p>This report presents the work carried out during the final year internship at {company_info['name']} company, specialized in the {company_info['sector']} sector. Lasting {student_info['duration']}, this internship aimed primarily at {student_info['project_title'].lower()}.</p>
+<p>The project involved developing an IT solution to optimize the company's internal processes. The adopted methodology followed a structured approach including a needs analysis phase, a design phase, a development phase, and a testing phase.</p>
+<p>The results demonstrate the effectiveness of the implemented solution, with a notable improvement in operational efficiency. This internship allowed consolidating the technical skills acquired during the training and gaining significant professional experience.</p>
+<p><b>Keywords:</b> Final year internship, {company_info['sector']}, Development, IT solution, {student_info['filiere']}, ENSA Oujda.</p>
+            """,
+            
+            'introduction': f"""
+<h2>INTRODUCTION GÉNÉRALE</h2>
+
+<h3>1. Contexte générale</h3>
+<p>Ce stage s'inscrit dans le cadre de la formation d'ingénieur en {student_info['filiere']} à l'École Nationale des Sciences Appliquées d'Oujda. Il représente une étape cruciale dans le parcours académique, permettant de mettre en pratique les connaissances théoriques acquises et de s'initier au milieu professionnel.</p>
+
+<h3>2. Cadre du stage</h3>
+<p>Le stage a été effectué au sein de l'entreprise {company_info['name']}, située à {company_info['location']}. Cette entreprise évolue dans le secteur {company_info['sector']} et {company_info['description'][:200] if company_info['description'] else "offre des services dans son domaine d'activité."}</p>
+
+<h3>3. Problématique</h3>
+<p>Avant la réalisation de ce projet, l'entreprise rencontrait des difficultés dans la gestion de ses processus internes, notamment en termes d'efficacité et de traçabilité. La nécessité de digitaliser et d'optimiser ces processus constituait le point de départ de ce travail.</p>
+
+<h3>4. Objectifs du travail</h3>
+<p>L'objectif principal était de concevoir et développer une solution informatique adaptée aux besoins identifiés. Les objectifs spécifiques incluaient : l'analyse des besoins, la conception de l'architecture, le développement de la solution, et la validation des résultats.</p>
+
+<h3>5. Méthodologie globale</h3>
+<p>Une méthodologie structurée a été adoptée, combinant analyse, conception, développement itératif et validation. Cette approche a permis d'assurer la qualité du produit final et sa conformité aux attentes.</p>
+
+<h3>6. Plan du rapport</h3>
+<p>Ce rapport est structuré en plusieurs chapitres. Après cette introduction générale, le deuxième chapitre présente l'entreprise et son contexte. Le troisième chapitre détaille la méthodologie adoptée. Le quatrième chapitre présente les résultats obtenus. Enfin, le cinquième chapitre propose une conclusion et des perspectives.</p>
+            """,
+            
+            'entreprise': f"""
+<h2>PRÉSENTATION DE L'ENTREPRISE</h2>
+
+<h3>1. Historique et présentation</h3>
+<p>{company_info['name']} est une entreprise établie à {company_info['location']}. {company_info['description'] if company_info['description'] else "Elle opère dans le secteur des technologies de l'information et des services."}</p>
+
+<h3>2. Secteur d'activité</h3>
+<p>L'entreprise évolue dans le secteur {company_info['sector']}, un domaine en constante évolution caractérisé par l'innovation technologique et la digitalisation des processus.</p>
+
+<h3>3. Organisation et structure</h3>
+<p>L'organisation de l'entreprise repose sur une structure hiérarchique avec différents départements fonctionnels. Le département dans lequel le stage a été effectué est le département de développement.</p>
+
+<h3>4. Missions et valeurs</h3>
+<p>Les principales missions de l'entreprise consistent à fournir des solutions informatiques innovantes à ses clients. Les valeurs fondamentales incluent l'excellence, l'innovation, la collaboration et la satisfaction client.</p>
+            """,
+            
+            'methodologie': f"""
+<h2>MÉTHODOLOGIE ADOPTÉE</h2>
+
+<h3>1. Approche méthodologique</h3>
+<p>Une approche itérative et incrémentale a été adoptée, permettant de développer la solution par cycles successifs avec des retours réguliers.</p>
+
+<h3>2. Phases du projet</h3>
+<p>Le projet a été divisé en quatre phases principales : analyse des besoins, conception technique, développement, et tests/validation.</p>
+
+<h3>3. Outils et technologies</h3>
+<p>Les technologies principales utilisées étaient : {project_info['technologies']}. Les outils de développement incluaient : {project_info['tools']}.</p>
+
+<h3>4. Organisation du travail</h3>
+<p>Le travail a été organisé en sprints hebdomadaires avec des réunions de suivi régulières pour assurer l'avancement du projet.</p>
+            """,
+            
+            'conclusion': f"""
+<h2>CONCLUSION ET PERSPECTIVES</h2>
+<p>Ce stage de fin d'études réalisé au sein de {company_info['name']} a constitué une expérience professionnelle enrichissante et formatrice. Il a permis de concrétiser les connaissances académiques acquises à l'ENSA d'Oujda dans un contexte professionnel réel.</p>
+<p>Le projet {student_info['project_title']} a abouti à la mise en place d'une solution fonctionnelle répondant aux besoins identifiés. Les objectifs fixés au début du stage ont été atteints, avec des résultats satisfaisants tant sur le plan technique que fonctionnel.</p>
+<p>Sur le plan personnel, ce stage a permis de développer des compétences techniques en {project_info['technologies'].split(',')[0] if project_info['technologies'] else 'développement'}, mais également des compétences transversales telles que le travail en équipe, la communication et la gestion de projet.</p>
+
+<h3>Perspectives :</h3>
+<ul>
+<li>Amélioration et optimisation continue de la solution développée</li>
+<li>Extension des fonctionnalités selon les besoins futurs</li>
+<li>Intégration avec d'autres systèmes de l'entreprise</li>
+<li>Déploiement à plus grande échelle</li>
+</ul>
+
+<p>En conclusion, ce stage a été l'occasion d'une transition réussie entre le monde académique et le monde professionnel, préparant ainsi l'intégration future dans le marché du travail.</p>
+            """
+        }
+        
+        # Stocker le rapport en mémoire
+        reports_store[report_id] = {
+            'data': {
+                'student': student_info,
+                'company': company_info,
+                'project': project_info,
+                'sections': sections,
+                'status': 'draft',
+                'generated_at': datetime.now().isoformat()
+            },
+            'session_id': session_id,
+            'created_at': datetime.now().isoformat(),
+            'last_modified': datetime.now().isoformat()
+        }
+        
+        sessions_store[session_id]['report_id'] = report_id
+        sessions_store[session_id]['data'] = {
+            'student_info': student_info,
+            'company_info': company_info,
+            'project_info': project_info
+        }
+        
+        print(f"✅ Rapport créé: {report_id}")
+        
+        # OPTION B : Retourner JSON avec redirection FORCÉE
+        return jsonify({
+            'success': True,
+            'message': 'Rapport généré avec succès',
+            'report_id': report_id,
+            'session_id': session_id,
+            'redirect_url': f'/editor-enhanced/{report_id}',
+            'force_redirect': True  # ← Ajoute ce flag CRITIQUE
+        })
+        
+    except Exception as e:
+        print(f"❌ ERREUR: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ============================================================================
+# PROMPTS ET GÉNÉRATION AVANCÉE
+# ============================================================================
+
+@app.route('/api/generate-prompts', methods=['POST'])
+@require_session
+def generate_prompts():
+    """Génère des prompts personnalisés basés sur l'analyse de style"""
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        section_name = data.get('section_name', 'introduction')
+        
+        session_data = sessions_store[session_id]
+        style_analysis = session_data.get('style_analysis', {})
+        student_info = session_data['data'].get('student_info', {})
+        company_info = session_data['data'].get('company_info', {})
+        
+        prompt = generate_section_prompt(
+            section_name=section_name,
+            student_info=student_info,
+            company_info=company_info,
+            style_analysis=style_analysis
+        )
+        
+        ai_generator = AIGenerator(reference_text=session_data['data'].get('reference_text', ''))
+        context = {
+            'student': student_info,
+            'company': company_info,
+            'options': {'writing_style': 'académique_formel'}
+        }
+        
+        example_content = ai_generator.generate_section(section_name, context)
+        
+        return jsonify({
+            'success': True,
+            'section': section_name,
+            'prompt': prompt,
+            'example_content': example_content.get('content', ''),
+            'style_analysis': style_analysis
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur génération prompts: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/generate-full-report', methods=['POST'])
+@require_session
+def generate_full_report():
+    """Génère un rapport complet via StageReportGenerator"""
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        options = data.get('options', {})
+        
+        session_data = sessions_store[session_id]
+        
+        print(f"🚀 Génération rapport pour session: {session_id}")
+        
+        generator = StageReportGenerator(
+            student_info=session_data['data'].get('student_info', {}),
+            company_info=session_data['data'].get('company_info', {}),
+            reference_text=session_data['data'].get('reference_text', ''),
+            options=options
+        )
+        
+        start_time = time.time()
+        report_data = generator.generate_full_report()
+        generation_time = time.time() - start_time
+        
+        report_id = report_data['report_id']
+        
+        reports_store[report_id] = {
+            'data': report_data,
+            'generator': generator,
+            'created_at': datetime.now().isoformat(),
+            'session_id': session_id,
+            'generation_time': generation_time
+        }
+        
+        sessions_store[session_id]['report_id'] = report_id
+        
+        print(f"✅ Rapport généré: {report_id} ({generation_time:.1f}s)")
+        
+        return jsonify({
+            'success': True,
+            'report_id': report_id,
+            'session_id': session_id,
+            'report_summary': generator.get_report_summary(),
+            'sections_generated': len(report_data.get('sections', {})),
+            'generation_time': generation_time,
+            'style_analysis': generator.get_style_analysis()
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur génération rapport: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+# ============================================================================
+# ÉDITEUR
+# ============================================================================
+
+@app.route('/editor')
+def editor():
+    """Page de l'éditeur (ancien format)"""
+    session_id = request.args.get('session_id')
+    
+    if not session_id or session_id not in sessions_store:
+        flash('Session invalide', 'error')
+        return redirect(url_for('index'))
+    
+    report_id = sessions_store[session_id].get('report_id')
+    if report_id and report_id in reports_store:
+        report_data = reports_store[report_id]['data']
+    else:
+        session_data = sessions_store[session_id]['data']
+        report_data = {
+            'student': session_data.get('student_info', {}),
+            'company': session_data.get('company_info', {}),
+            'sections': {},
+            'status': 'draft',
+            'generated_at': datetime.now().isoformat()
+        }
+    
+    return render_template('editor.html',
+                         session_id=session_id,
+                         report=report_data,
+                         sections=StageReportGenerator.STANDARD_SECTIONS,
+                         app_name="Éditeur de rapport")
+
+@app.route('/editor-simple/<report_id>')
+def editor_simple(report_id):
+    """Éditeur WYSIWYG après génération — c'est la page principale d'édition"""
+    if report_id not in reports_store:
+        flash('Rapport non trouvé', 'error')
+        return redirect(url_for('index'))
+    
+    report_data = reports_store[report_id]['data']
+    
+    return render_template('editor_simple.html',
+                         report=report_data,
+                         report_id=report_id,
+                         app_name="Éditeur de Rapport")
+
+@app.route('/edit/<report_id>')
+def edit_report(report_id):
+    """Page d'édition complète (ancien format)"""
+    if report_id not in reports_store:
+        flash('Rapport non trouvé', 'error')
+        return redirect(url_for('index'))
+    
+    report_data = reports_store[report_id]['data']
+    
+    return render_template('editor_full.html',
+                         report=report_data,
+                         report_id=report_id,
+                         app_name="Éditeur de Rapport")
+
+# ============================================================================
+# API ÉDITION
+# ============================================================================
+
+@app.route('/api/get-report-content/<report_id>')
+def get_report_content(report_id):
+    """API pour récupérer le contenu du rapport (utilisée par les deux éditeurs)"""
+    if report_id not in reports_store:
+        return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+    
+    report_data = reports_store[report_id]['data']
+    
+    # Format pour l'éditeur simple: sections séparées
+    sections_data = {}
+    for name, content in report_data.get('sections', {}).items():
+        sections_data[name] = content
+    
+    # Format HTML complet pour l'éditeur full
+    html_content = f"""
+    <div class="academic-report">
+        <h1 style="text-align: center; color: #2C3E50;">{report_data.get('student', {}).get('project_title', 'Rapport')}</h1>
+        <h3 style="text-align: center; color: #7F8C8D;">Étudiant: {report_data.get('student', {}).get('full_name', '')}</h3>
+        <hr style="border-top: 2px solid #3498DB;">
+    """
+    for section_name, content in report_data.get('sections', {}).items():
+        html_content += f'<div class="report-section" data-section="{section_name}"><div class="section-content">{content}</div></div><hr>'
+    html_content += "</div>"
+    
+    return jsonify({
+        'success': True,
+        'content': html_content,
+        'sections': sections_data,
+        'student_name': report_data.get('student', {}).get('full_name', ''),
+        'project_title': report_data.get('student', {}).get('project_title', ''),
+        'metadata': {
+            'title': report_data.get('student', {}).get('project_title', ''),
+            'author': report_data.get('student', {}).get('full_name', ''),
+            'created_at': reports_store[report_id].get('created_at', '')
+        }
+    })
+
+@app.route('/api/update-single-section/<report_id>', methods=['POST'])
+def update_single_section(report_id):
+    """Met à jour une seule section du rapport (utilisée par l'éditeur simple)"""
+    try:
+        if report_id not in reports_store:
+            return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+        
+        data = request.json
+        section_name = data.get('section_name', '')
+        content = data.get('content', '')
+        
+        if not section_name:
+            return jsonify({'success': False, 'error': 'Nom de section manquant'}), 400
+        
+        reports_store[report_id]['data']['sections'][section_name] = content
+        reports_store[report_id]['last_modified'] = datetime.now().isoformat()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Section sauvegardée',
+            'section': section_name,
+            'saved_at': datetime.now().strftime('%H:%M:%S')
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur mise à jour section: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/save-report/<report_id>', methods=['POST'])
+def save_report(report_id):
+    """Sauvegarde les modifications complètes du rapport"""
+    try:
+        if report_id not in reports_store:
+            return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+        
+        data = request.json
+        content = data.get('content', '')
+        
+        reports_store[report_id]['data']['sections'] = extract_sections_from_html(content)
+        reports_store[report_id]['last_modified'] = datetime.now().isoformat()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Rapport sauvegardé',
+            'modified_at': datetime.now().strftime('%H:%M:%S')
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/update-report/<report_id>', methods=['POST'])
+def update_report(report_id):
+    """Met à jour le contenu d'un rapport (ancien format)"""
+    try:
+        if report_id not in reports_store:
+            return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+        
+        data = request.json
+        updated_content = data.get('content', '')
+        
+        reports_store[report_id]['data']['sections'] = extract_sections_from_html(updated_content)
+        reports_store[report_id]['last_modified'] = datetime.now().isoformat()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Rapport mis à jour',
+            'modified_at': datetime.now().strftime('%d/%m/%Y %H:%M')
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur mise à jour: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/save-draft/<report_id>', methods=['POST'])
+def save_draft(report_id):
+    """Sauvegarde une version brouillon"""
+    try:
+        if report_id not in reports_store:
+            return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+        
+        data = request.json
+        content = data.get('content', '')
+        
+        if 'drafts' not in reports_store[report_id]:
+            reports_store[report_id]['drafts'] = []
+        
+        reports_store[report_id]['drafts'].append({
+            'content': content,
+            'saved_at': datetime.now().isoformat(),
+            'version': len(reports_store[report_id]['drafts']) + 1
+        })
+        
+        return jsonify({
+            'success': True,
+            'message': 'Brouillon sauvegardé',
+            'version': len(reports_store[report_id]['drafts']),
+            'saved_at': datetime.now().strftime('%H:%M:%S')
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur sauvegarde brouillon: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/generate-section', methods=['POST'])
+@require_session
+def api_generate_section():
+    """Génère une section spécifique"""
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        section_name = data.get('section_name')
+        custom_prompt = data.get('custom_prompt')
+        style = data.get('style', 'académique_formel')
+        
+        session_data = sessions_store[session_id]
+        report_id = session_data.get('report_id')
+        
+        if not report_id or report_id not in reports_store:
+            return jsonify({
+                'success': False,
+                'error': 'Aucun rapport trouvé. Générez d\'abord un rapport complet.'
+            }), 404
+        
+        generator = reports_store[report_id]['generator']
+        
+        context = {
+            'student': session_data['data'].get('student_info', {}),
+            'company': session_data['data'].get('company_info', {}),
+            'options': {'writing_style': style}
+        }
+        
+        if custom_prompt:
+            result = generator._generate_with_custom_prompt(section_name, custom_prompt, context)
+        else:
+            result = generator.generate_section(section_name, context)
+        
+        reports_store[report_id]['data']['sections'][section_name] = result['content']
+        reports_store[report_id]['data']['metadata'][section_name] = result['metadata']
+        
+        return jsonify({
+            'success': True,
+            'section': section_name,
+            'content': result['content'],
+            'metadata': result['metadata'],
+            'word_count': result['metadata'].get('word_count', 0)
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur génération section: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/update-section', methods=['POST'])
+@require_session
+def api_update_section():
+    """Met à jour une section (via StageReportGenerator)"""
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        section_name = data.get('section_name')
+        content = data.get('content')
+        
+        report_id = sessions_store[session_id].get('report_id')
+        
+        if not report_id or report_id not in reports_store:
+            return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+        
+        generator = reports_store[report_id]['generator']
+        success = generator.edit_section(section_name, content)
+        
+        if success:
+            reports_store[report_id]['data']['sections'][section_name] = content
+            
+            return jsonify({
+                'success': True,
+                'section': section_name,
+                'message': 'Section mise à jour',
+                'word_count': len(content.split())
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Échec de mise à jour'
+            }), 500
+            
+    except Exception as e:
+        print(f"❌ Erreur mise à jour section: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/get-report', methods=['GET'])
+@require_session
+def api_get_report():
+    """Récupère un rapport"""
+    try:
+        session_id = request.args.get('session_id')
+        report_id = sessions_store[session_id].get('report_id')
+        
+        if not report_id or report_id not in reports_store:
+            return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+        
+        report_data = reports_store[report_id]['data']
+        
+        return jsonify({
+            'success': True,
+            'report': report_data,
+            'summary': reports_store[report_id]['generator'].get_report_summary(),
+            'style_analysis': reports_store[report_id]['generator'].get_style_analysis()
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur récupération rapport: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================================
+# TÉLÉCHARGEMENT — TOUTES LES ROUTES UTILISENT BytesIO
+# ============================================================================
+
+@app.route('/download')
+def download_page():
+    """Page de téléchargement"""
+    session_id = request.args.get('session_id')
+    
+    if not session_id or session_id not in sessions_store:
+        flash('Session invalide', 'error')
+        return redirect(url_for('index'))
+    
+    report_id = sessions_store[session_id].get('report_id')
+    
+    if not report_id or report_id not in reports_store:
+        flash('Générez d\'abord un rapport', 'error')
+        return redirect(url_for('editor', session_id=session_id))
+    
+    report_data = reports_store[report_id]['data']
+    
+    return render_template('download.html',
+                         session_id=session_id,
+                         report=report_data,
+                         app_name="Téléchargement")
+
+@app.route('/api/download-report-pdf/<report_id>')
+def download_report_pdf(report_id):
+    """Télécharge le rapport en PDF — utilisé par l'éditeur simple"""
+    try:
+        if report_id not in reports_store:
+            return "Rapport non trouvé", 404
+        
+        report_data = reports_store[report_id]['data']
+        buffer = generate_pdf_buffer(report_data)
+        
+        filename = f'Rapport_{report_data["student"]["full_name"].replace(" ", "_")}.pdf'
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/pdf'
+        )
+        
+    except Exception as e:
+        print(f"❌ Erreur génération PDF: {e}")
+        traceback.print_exc()
+        # PDF d'erreur en mémoire
+        from reportlab.pdfgen import canvas as rl_canvas
+        err_buffer = BytesIO()
+        c = rl_canvas.Canvas(err_buffer)
+        c.drawString(100, 800, "ERREUR DE GÉNÉRATION PDF")
+        c.drawString(100, 780, str(e)[:100])
+        c.save()
+        err_buffer.seek(0)
+        return send_file(err_buffer, as_attachment=True, download_name='erreur.pdf', mimetype='application/pdf')
+
+@app.route('/api/download-report-word/<report_id>')
+def download_report_word(report_id):
+    """Télécharge le rapport en Word — utilisé par l'éditeur simple"""
+    try:
+        if report_id not in reports_store:
+            return "Rapport non trouvé", 404
+        
+        report_data = reports_store[report_id]['data']
+        buffer = generate_word_buffer(report_data)
+        
+        filename = f'Rapport_{report_data["student"]["full_name"].replace(" ", "_")}.docx'
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+        
+    except Exception as e:
+        print(f"❌ Erreur génération Word: {e}")
+        traceback.print_exc()
+        # DOCX d'erreur en mémoire
+        from docx import Document as DocxDoc
+        err_doc = DocxDoc()
+        err_doc.add_heading('Erreur de génération', 0)
+        err_doc.add_paragraph(f'Une erreur est survenue: {str(e)[:200]}')
+        err_buffer = BytesIO()
+        err_doc.save(err_buffer)
+        err_buffer.seek(0)
+        return send_file(err_buffer, as_attachment=True, download_name='erreur.docx',
+                        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+@app.route('/export/pdf')
+@require_session
+def export_pdf():
+    """Export PDF (ancien format — utilise aussi BytesIO maintenant)"""
+    try:
+        session_id = request.args.get('session_id')
+        report_id = sessions_store[session_id].get('report_id')
+        
+        if not report_id or report_id not in reports_store:
+            return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+        
+        report_data = reports_store[report_id]['data']
+        buffer = generate_pdf_buffer(report_data)
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=f"rapport_stage_{report_data['student']['full_name'].replace(' ', '_')}.pdf",
+            mimetype='application/pdf'
+        )
+        
+    except Exception as e:
+        print(f"❌ Erreur export PDF: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/export/word')
+@require_session
+def export_word():
+    """Export Word (ancien format — utilise aussi BytesIO maintenant)"""
+    try:
+        session_id = request.args.get('session_id')
+        report_id = sessions_store[session_id].get('report_id')
+        
+        if not report_id or report_id not in reports_store:
+            return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+        
+        report_data = reports_store[report_id]['data']
+        buffer = generate_word_buffer(report_data)
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=f"rapport_stage_{report_data['student']['full_name'].replace(' ', '_')}.docx",
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+        
+    except Exception as e:
+        print(f"❌ Erreur export Word: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/generate-final-pdf/<report_id>')
+def generate_final_pdf(report_id):
+    """Génère le PDF final après édition (ancien format — corrigé avec BytesIO)"""
+    try:
+        if report_id not in reports_store:
+            return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+        
+        report_data = reports_store[report_id]['data']
+        buffer = generate_pdf_buffer(report_data)
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=f"rapport_final_{report_data['student']['full_name'].replace(' ', '_')}.pdf",
+            mimetype='application/pdf'
+        )
+        
+    except Exception as e:
+        print(f"❌ Erreur génération PDF final: {e}")
+        from reportlab.pdfgen import canvas as rl_canvas
+        err_buffer = BytesIO()
+        c = rl_canvas.Canvas(err_buffer)
+        c.drawString(100, 800, "RAPPORT FINAL - ERREUR")
+        c.save()
+        err_buffer.seek(0)
+        return send_file(err_buffer, as_attachment=True, download_name='rapport_final.pdf', mimetype='application/pdf')
+
+# ============================================================================
+# API ANALYSE ET CONSEILS
+# ============================================================================
+
+@app.route('/api/style-tips', methods=['GET'])
+@require_session
+def api_style_tips():
+    """Conseils de style"""
+    try:
+        session_id = request.args.get('session_id')
+        session_data = sessions_store[session_id]
+        
+        if 'style_analysis' not in session_data:
+            return jsonify({'success': False, 'error': 'Aucune analyse de style'}), 400
+        
+        reference_text = session_data['data'].get('reference_text', '')
+        if not reference_text:
+            return jsonify({'success': False, 'error': 'Aucun texte de référence'}), 400
+        
+        prompt_generator = AcademicPromptGenerator(reference_text)
+        tips = prompt_generator.get_academic_tips()
+        
+        return jsonify({
+            'success': True,
+            'tips': tips,
+            'style_report': prompt_generator.get_style_report()
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur conseils style: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/validate-report', methods=['GET'])
+@require_session
+def api_validate_report():
+    """Validation du rapport"""
+    try:
+        session_id = request.args.get('session_id')
+        report_id = sessions_store[session_id].get('report_id')
+        
+        if not report_id or report_id not in reports_store:
+            return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+        
+        generator = reports_store[report_id]['generator']
+        validation = generator.validate_report()
+        
+        return jsonify({
+            'success': True,
+            'validation': validation,
+            'academic_tips': generator.get_academic_tips()
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur validation: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================================
+# ÉDITEUR POST-GÉNÉRATION - NOUVELLE INTERFACE
+# ============================================================================
+
+@app.route('/test-nouvel-editeur')
+def test_nouvel_editeur():
+    """Route de test pour vérifier que le nouvel éditeur fonctionne"""
+    print("🎯 DÉMARRAGE TEST NOUVEL ÉDITEUR")
+    
+    # Crée un rapport de test
+    report_id = 'test-' + str(uuid.uuid4())
+    
+    reports_store[report_id] = {
+        'data': {
+            'student': {
+                'full_name': 'Najoua Boughida',
+                'filiere': 'Génie Informatique',
+                'project_title': 'Projet de Test',
+                'academic_supervisor': 'Dr. Test Supervisor',
+                'duration': '2 mois',
+                'academic_year': '2024-2025'
+            },
+            'company': {
+                'name': 'SPLY Technologies',
+                'supervisor': 'Mme. Boughida',
+                'sector': 'Informatique',
+                'location': 'Oujda'
+            },
+            'sections': {
+                'remerciements': '<h2>REMERCIEMENTS</h2><p>Je tiens à remercier mon encadrant...</p>',
+                'resume': '<h2>RÉSUMÉ</h2><p>Ce rapport présente un projet de test...</p>',
+                'introduction': '<h2>INTRODUCTION</h2><p>Ceci est une introduction de test...</p>',
+                'entreprise': '<h2>PRÉSENTATION ENTREPRISE</h2><p>SPLY est une entreprise...</p>',
+                'methodologie': '<h2>MÉTHODOLOGIE</h2><p>Méthodologie utilisée...</p>',
+                'conclusion': '<h2>CONCLUSION</h2><p>Conclusion du projet...</p>'
+            },
+            'status': 'draft',
+            'generated_at': datetime.now().isoformat()
+        },
+        'session_id': 'test-session-123',
+        'created_at': datetime.now().isoformat(),
+        'last_modified': datetime.now().isoformat()
+    }
+    
+    print(f"✅ Rapport test créé: {report_id}")
+    print(f"📁 Redirection vers: /editor-enhanced/{report_id}")
+    
+    # Redirige vers le nouvel éditeur
+    return redirect(f'/editor-enhanced/{report_id}')
+
+@app.route('/editor-enhanced/<report_id>')
+def editor_enhanced(report_id):
+    """NOUVELLE INTERFACE : Éditeur post-génération qui respecte la structure"""
+    print(f"🎯 ACCÈS ÉDITEUR ENHANCED POUR: {report_id}")
+    
+    if report_id not in reports_store:
+        print(f"❌ Rapport {report_id} non trouvé")
+        return jsonify({
+            'success': False,
+            'error': f'Rapport {report_id} non trouvé'
+        }), 404
+    
+    report_data = reports_store[report_id]['data']
+    print(f"✅ Rapport trouvé: {report_data.get('student', {}).get('full_name', 'Inconnu')}")
+    
+    # Structure académique standard
+    academic_structure = {
+        'remerciements': {
+            'title': 'REMERCIEMENTS',
+            'required': True,
+            'locked': True,
+            'description': 'Remerciements aux encadrants, famille, etc.',
+            'min_words': 100,
+            'max_words': 500
+        },
+        'resume': {
+            'title': 'RÉSUMÉ / ABSTRACT',
+            'required': True,
+            'locked': True,
+            'description': 'Résumé en français et abstract en anglais',
+            'min_words': 150,
+            'max_words': 300
+        },
+        'introduction': {
+            'title': 'INTRODUCTION GÉNÉRALE',
+            'required': True,
+            'locked': False,
+            'description': 'Contexte, problématique, objectifs et plan du rapport',
+            'subsections': ['Contexte', 'Problématique', 'Objectifs', 'Plan'],
+            'min_words': 300,
+            'max_words': 800
+        },
+        'entreprise': {
+            'title': "PRÉSENTATION DE L'ENTREPRISE",
+            'required': True,
+            'locked': True,
+            'description': "Historique, secteur d'activité, organisation",
+            'subsections': ['Historique', 'Secteur', 'Organisation', 'Valeurs'],
+            'min_words': 250,
+            'max_words': 600
+        },
+        'methodologie': {
+            'title': 'MÉTHODOLOGIE ADOPTÉE',
+            'required': True,
+            'locked': False,
+            'description': 'Méthodes, outils et approches utilisés',
+            'subsections': ['Approche', 'Phases', 'Outils', 'Organisation'],
+            'min_words': 200,
+            'max_words': 500
+        },
+        'conclusion': {
+            'title': 'CONCLUSION ET PERSPECTIVES',
+            'required': True,
+            'locked': False,
+            'description': 'Bilan du stage et perspectives futures',
+            'subsections': ['Bilan', 'Apports', 'Perspectives'],
+            'min_words': 200,
+            'max_words': 500
+        }
+    }
+    
+    print(f"📊 Rendering template avec {len(academic_structure)} sections")
+    
+    return render_template('editor_enhanced.html',
+                         report=report_data,
+                         report_id=report_id,
+                         structure=academic_structure,
+                         app_name="Éditeur Structuré")
+
+@app.route('/api/validate-structure/<report_id>', methods=['GET'])
+def validate_structure(report_id):
+    """Valide la structure académique du rapport"""
+    try:
+        if report_id not in reports_store:
+            return jsonify({'success': False, 'error': 'Rapport non trouvé'}), 404
+        
+        report_data = reports_store[report_id]['data']
+        sections = report_data.get('sections', {})
+        
+        # Structure académique à respecter
+        academic_structure = {
+            'remerciements': {'min_words': 100, 'required': True},
+            'resume': {'min_words': 150, 'required': True},
+            'introduction': {'min_words': 300, 'required': True},
+            'entreprise': {'min_words': 250, 'required': True},
+            'methodologie': {'min_words': 200, 'required': True},
+            'conclusion': {'min_words': 200, 'required': True}
+        }
+        
+        validation_results = []
+        total_words = 0
+        completed_sections = 0
+        
+        for section_id, requirements in academic_structure.items():
+            content = sections.get(section_id, '')
+            # Compter les mots
+            text = content.replace('<', ' <').replace('>', '> ')
+            words = len([w for w in text.split() if w.strip() and not w.startswith('<')])
+            
+            is_valid = words >= requirements['min_words']
+            if is_valid:
+                completed_sections += 1
+            
+            total_words += words
+            
+            validation_results.append({
+                'section': section_id,
+                'title': section_id.replace('_', ' ').upper(),
+                'word_count': words,
+                'required_words': requirements['min_words'],
+                'is_valid': is_valid,
+                'status': 'valid' if is_valid else 'insufficient'
+            })
+        
+        # Calculer la progression
+        progress = (completed_sections / len(academic_structure)) * 100
+        
+        return jsonify({
+            'success': True,
+            'validation': validation_results,
+            'summary': {
+                'total_sections': len(academic_structure),
+                'completed_sections': completed_sections,
+                'progress': round(progress, 1),
+                'total_words': total_words,
+                'is_complete': progress >= 80
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================================
+# ADMIN ET STATISTIQUES
+# ============================================================================
+
+@app.route('/admin/status')
+def admin_status():
+    """Statut de l'application"""
+    cleanup_old_sessions()
+    
+    return jsonify({
+        'status': 'running',
+        'sessions_count': len(sessions_store),
+        'reports_count': len(reports_store),
+        'uptime': str(datetime.now() - app_start_time),
+        'memory_usage_mb': os.sys.getsizeof(sessions_store) / 1024 / 1024
+    })
+
+# ============================================================================
+# GESTION DES ERREURS
+# ============================================================================
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return jsonify({
+        'success': False,
+        'error': 'Page non trouvée',
+        'path': request.path
+    }), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    print(f"❌ Erreur 500: {error}")
+    return jsonify({
+        'success': False,
+        'error': 'Erreur interne du serveur',
+        'message': 'Veuillez réessayer plus tard'
+    }), 500
+
+# ============================================================================
+# DÉMARRAGE
+# ============================================================================
+
+app_start_time = datetime.now()
+
+if __name__ == '__main__':
+    print("=" * 60)
+    print("🚀 GÉNÉRATEUR INTELLIGENT DE RAPPORTS ACADÉMIQUES ENSAO")
+    print("=" * 60)
+    print(f"📁 Dossiers: uploads/, generated/, temp/")
+    print(f"🌐 URL: http://localhost:5000")
+    print(f"🔧 Mode: {'Développement' if app.debug else 'Production'}")
+    print(f"🤖 IA: {'Réel' if app.config.get('ENABLE_REAL_OPENAI') else 'Simulation'}")
+    print(f"📊 Sessions actives: {len(sessions_store)}")
+    print("=" * 60)
+    
+    app.run(
+        host='0.0.0.0',
+        port=5000,
+        debug=True,
+        threaded=True
+    )

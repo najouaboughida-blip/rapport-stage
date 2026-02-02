@@ -1,0 +1,614 @@
+{% extends "base.html" %}
+
+{% block title %}Nouveau Rapport - {{ app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        background: white;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    
+    .form-section h4 {
+        color: var(--primary-color);
+        border-bottom: 2px solid var(--secondary-color);
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .required::after {
+        content: " *";
+        color: var(--accent-color);
+    }
+    
+    .form-illustration {
+        background: linear-gradient(135deg, #F8F9FA 0%, #E9ECEF 100%);
+        border-radius: 8px;
+        padding: 1.5rem;
+        border-left: 4px solid var(--secondary-color);
+    }
+    
+    .word-counter {
+        font-size: 0.875rem;
+        color: var(--text-light);
+        text-align: right;
+        margin-top: 0.25rem;
+    }
+    
+    .word-counter.warning {
+        color: var(--warning-color);
+    }
+    
+    .word-counter.error {
+        color: var(--accent-color);
+    }
+    
+    .preview-box {
+        background: #F8F9FA;
+        border: 1px dashed #BDC3C7;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+        font-size: 0.9rem;
+        color: var(--text-light);
+    }
+    
+    .ai-suggestion {
+        background: #E8F4FC;
+        border: 1px solid #D1ECF1;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        color: #0C5460;
+    }
+    
+    .ai-suggestion i {
+        color: var(--secondary-color);
+    }
+    
+    .test-section {
+        background: #e3f2fd !important;
+        border: 2px dashed #1976d2 !important;
+        margin-top: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- En-tête -->
+            <div class="text-center mb-5">
+                <h1 class="display-5 fw-bold mb-3" style="color: var(--primary-color);">
+                    <i class="fas fa-file-alt me-2"></i>Créer votre Rapport de Stage
+                </h1>
+                <p class="lead text-muted mb-0">
+                    Remplissez ce formulaire détaillé pour générer un rapport académique personnalisé
+                </p>
+                <div class="mt-3">
+                    <span class="badge-academic me-2">Style académique</span>
+                    <span class="badge bg-success me-2">Normes ENSA</span>
+                    <span class="badge bg-info">IA Intelligente</span>
+                </div>
+            </div>
+
+            <!-- Formulaire principal -->
+            <form id="reportForm">
+                <!-- Champ caché pour session_id -->
+                {% if session_id %}
+                <input type="hidden" id="form_session_id" name="session_id" value="{{ session_id }}">
+                {% else %}
+                <input type="hidden" id="form_session_id" name="session_id" value="">
+                {% endif %}
+                
+                <!-- Section 1: Informations étudiant -->
+                <div class="form-section">
+                    <h4><i class="fas fa-user-graduate me-2"></i>Informations de l'Étudiant</h4>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label required">Nom complet</label>
+                            <input type="text" class="form-control form-control-academic" 
+                                   name="full_name" required
+                                   placeholder="LEGSIR Imane">
+                            <div class="form-text">Nom et prénom en majuscules, prénom en minuscules</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label required">Filière</label>
+                            <select class="form-select form-control-academic" name="filiere" required>
+                                <option value="Génie Informatique" selected>Génie Informatique</option>
+                                <option value="Génie Civil">Génie Civil</option>
+                                <option value="Génie Électrique">Génie Électrique</option>
+                                <option value="Génie Mécanique">Génie Mécanique</option>
+                                <option value="Génie des Procédés">Génie des Procédés</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label required">Titre du projet</label>
+                            <input type="text" class="form-control form-control-academic" 
+                                   name="project_title" required
+                                   placeholder="Refonte de l'Architecture Conversationnelle du WinBot">
+                            <div class="form-text">Titre précis et descriptif de votre stage</div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label required">Durée du stage</label>
+                            <select class="form-select form-control-academic" name="duration" required>
+                                <option value="2 mois" selected>2 mois</option>
+                                <option value="3 mois">3 mois</option>
+                                <option value="4 mois">4 mois</option>
+                                <option value="5 mois">5 mois</option>
+                                <option value="6 mois">6 mois</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label required">Encadrant académique</label>
+                            <input type="text" class="form-control form-control-academic" 
+                                   name="academic_supervisor" required
+                                   placeholder="Dr. Mohammed SABER">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label required">Année universitaire</label>
+                            <input type="text" class="form-control form-control-academic" 
+                                   name="academic_year" required
+                                   value="2024-2025">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Informations entreprise -->
+                <div class="form-section">
+                    <h4><i class="fas fa-building me-2"></i>Informations de l'Entreprise</h4>
+                    
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label required">Nom de l'entreprise</label>
+                            <input type="text" class="form-control form-control-academic" 
+                                   name="company_name" required
+                                   placeholder="Capgemini TS">
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label required">Secteur d'activité</label>
+                            <select class="form-select form-control-academic" name="company_sector" required>
+                                <option value="Informatique" selected>Informatique</option>
+                                <option value="Télécommunications">Télécommunications</option>
+                                <option value="Banque/Finance">Banque/Finance</option>
+                                <option value="Industrie">Industrie</option>
+                                <option value="Services">Services</option>
+                                <option value="Autre">Autre</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label required">Encadrant professionnel</label>
+                            <input type="text" class="form-control form-control-academic" 
+                                   name="company_supervisor" required
+                                   placeholder="Mme. BOUDAD Fatima-Zahra">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Localisation</label>
+                            <input type="text" class="form-control form-control-academic" 
+                                   name="company_location"
+                                   placeholder="Casablanca, Maroc">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Description de l'entreprise (optionnel)</label>
+                        <textarea class="form-control form-control-academic" 
+                                  name="company_description" rows="3"
+                                  id="company_description"
+                                  placeholder="Brève description des activités principales, taille, etc."></textarea>
+                        <div class="word-counter" id="companyDescCounter">0/200 mots</div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Détails du projet -->
+                <div class="form-section">
+                    <h4><i class="fas fa-project-diagram me-2"></i>Détails du Projet</h4>
+                    
+                    <div class="form-illustration mb-4">
+                        <h6><i class="fas fa-lightbulb me-2 text-warning"></i>Conseil pour une bonne description</h6>
+                        <p class="mb-2">Décrivez votre projet de manière détaillée mais structurée :</p>
+                        <ol class="mb-0" style="font-size: 0.9rem;">
+                            <li><strong>Contexte :</strong> Pourquoi ce projet ? Quel problème résout-il ?</li>
+                            <li><strong>Objectifs :</strong> Que vouliez-vous accomplir ?</li>
+                            <li><strong>Méthodologie :</strong> Comment avez-vous procédé ?</li>
+                            <li><strong>Résultats :</strong> Qu'avez-vous obtenu ?</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label required">Description détaillée du projet</label>
+                        <textarea class="form-control form-control-academic" 
+                                  name="project_description" rows="8" required
+                                  id="projectDescription"
+                                  placeholder="Exemple :
+
+Contexte : Stage effectué chez Capgemini TS dans le cadre du projet WIN by INWI. Le projet visait à optimiser l'architecture conversationnelle du WinBot, un chatbot destiné à améliorer l'expérience client.
+
+Problématique : L'architecture existante limitait le nombre de dialogues à 500, ce qui restreignait les fonctionnalités et l'évolutivité du système.
+
+Objectifs : 
+- Réaliser un audit complet des dialogues existants
+- Identifier les redondances et opportunités d'optimisation
+- Concevoir une architecture modulaire et évolutive
+- Implémenter la nouvelle architecture avec Salesforce Einstein Bot
+- Valider les performances de la nouvelle solution
+
+Méthodologie : Approche Agile avec cycles de développement courts, analyse comparative, conception modulaire, développement en Apex et Flow Builder.
+
+Résultats : Réduction de 40% du nombre de dialogues tout en augmentant les fonctionnalités de 25%, amélioration des performances de 30%."></textarea>
+                        <div class="word-counter" id="projectDescCounter">0/100 mots minimum</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Technologies utilisées</label>
+                            <input type="text" class="form-control form-control-academic" 
+                                   name="technologies"
+                                   placeholder="Salesforce, Apex, Flow Builder, Einstein Bot, HTML/CSS, JavaScript">
+                            <div class="form-text">Séparez par des virgules</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Outils de développement</label>
+                            <input type="text" class="form-control form-control-academic" 
+                                   name="development_tools"
+                                   placeholder="VS Code, Git, JIRA, Salesforce Developer Console">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Difficultés rencontrées et solutions</label>
+                        <textarea class="form-control form-control-academic" 
+                                  name="challenges" rows="3"
+                                  id="challenges"
+                                  placeholder="Décrivez les principaux défis techniques ou organisationnels et comment vous les avez surmontés."></textarea>
+                    </div>
+                </div>
+
+                <!-- Section 4: Options de génération -->
+                <div class="form-section">
+                    <h4><i class="fas fa-cogs me-2"></i>Options de Génération</h4>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label required">Style d'écriture</label>
+                            <select class="form-select form-control-academic" name="writing_style" required>
+                                <option value="académique_formel" selected>Académique formel</option>
+                                <option value="académique_technique">Académique technique</option>
+                                <option value="professionnel">Professionnel</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label required">Longueur cible</label>
+                            <select class="form-select form-control-academic" name="target_length" required>
+                                <option value="60-80" selected>60-80 pages (standard)</option>
+                                <option value="40-60">40-60 pages</option>
+                                <option value="80-100">80-100 pages</option>
+                                <option value="100+">100+ pages (détaillé)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label required">Niveau académique</label>
+                            <select class="form-select form-control-academic" name="academic_level" required>
+                                <option value="licence" selected>Licence</option>
+                                <option value="master">Master</option>
+                                <option value="ingénieur">Ingénieur</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Inclure des figures</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="include_figures" id="includeFigures" checked>
+                                <label class="form-check-label" for="includeFigures">
+                                    Oui, ajouter des descriptions de figures et tableaux
+                                </label>
+                            </div>
+                            <div class="form-text">Recommandé pour les rapports techniques</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Références bibliographiques</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="include_bibliography" id="includeBibliography" checked>
+                                <label class="form-check-label" for="includeBibliography">
+                                    Oui, générer une bibliographie
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Instructions spéciales (optionnel)</label>
+                        <textarea class="form-control form-control-academic" 
+                                  name="special_instructions" rows="3"
+                                  id="special_instructions"
+                                  placeholder="Instructions particulières pour la génération, aspects à mettre en avant, etc."></textarea>
+                    </div>
+                </div>
+
+                <!-- Section 5: Analyse de style (optionnel) -->
+                <div class="form-section">
+                    <h4><i class="fas fa-pen-fancy me-2"></i>Analyse de Style Personnel</h4>
+                    
+                    <div class="alert-academic alert-academic-info">
+                        <h6><i class="fas fa-info-circle me-2"></i>Améliorez la personnalisation</h6>
+                        <p class="mb-0">
+                            Fournissez un exemple de votre écriture académique (introduction, paragraphe, extrait de rapport).
+                            Notre système analysera votre style et l'imitera dans la génération.
+                        </p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Exemple de votre écriture académique</label>
+                        <textarea class="form-control form-control-academic" 
+                                  name="writing_sample" rows="6"
+                                  id="writingSample"
+                                  placeholder="Exemple : 
+
+L'introduction générale du présent rapport s'inscrit dans le cadre du stage de fin d'études effectué au sein de l'entreprise Capgemini TS. Ce stage, d'une durée de deux mois, a pour objectif principal la refonte de l'architecture conversationnelle du WinBot.
+
+Dans un premier temps, nous présenterons le contexte général du projet ainsi que la problématique rencontrée. Ensuite, nous détaillerons la méthodologie adoptée pour répondre à cette problématique. Enfin, nous exposerons les résultats obtenus et les perspectives d'amélioration.
+
+Il convient de souligner que ce travail s'appuie sur une analyse approfondie des besoins fonctionnels et techniques, ainsi que sur une revue de la littérature relative aux systèmes conversationnels modernes..."></textarea>
+                        <div class="word-counter" id="writingSampleCounter">0/50 mots recommandé</div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <a href="{{ url_for('reference_style') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-chart-line me-2"></i>Utiliser l'analyse avancée de style
+                        </a>
+                        <div class="form-text mt-2">
+                            L'analyse avancée fournit des recommandations personnalisées pour améliorer votre écriture
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Boutons d'action -->
+                <div class="form-section">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="d-grid">
+                                <a href="{{ url_for('index') }}" class="btn btn-academic-secondary">
+                                    <i class="fas fa-arrow-left me-2"></i>Retour à l'accueil
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-grid">
+                                <button type="button" class="btn btn-academic" id="generateButton">
+                                    <i class="fas fa-magic me-2"></i>Générer le Rapport
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-4">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="agreeTerms" required>
+                            <label class="form-check-label" for="agreeTerms">
+                                J'accepte que mon rapport soit analysé pour améliorer le système
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </form>
+            
+            <!-- Section de test visible -->
+            <div class="form-section test-section">
+                <h4><i class="fas fa-rocket me-2 text-primary"></i>TEST RAPIDE</h4>
+                <p class="mb-3">Cliquez ici pour aller directement à l'éditeur structuré (sans remplir le formulaire) :</p>
+                <div class="d-grid">
+                    <button id="testButton" class="btn btn-success btn-lg py-3">
+                        <i class="fas fa-external-link-alt me-2"></i>TESTER L'ÉDITEUR STRUCTURÉ
+                    </button>
+                </div>
+                <small class="text-muted mt-2 d-block">
+                    <i class="fas fa-info-circle me-1"></i>Ce bouton créera un rapport de test et ouvrira l'éditeur structuré
+                </small>
+            </div>
+            
+            <!-- Informations de progression -->
+            <div class="mt-4 text-center">
+                <div class="progress progress-academic mb-2">
+                    <div class="progress-bar" role="progressbar" style="width: 0%" id="formProgress"></div>
+                </div>
+                <small class="text-muted">
+                    <span id="currentStep">Étape 1/5</span> • 
+                    <span id="estimatedTime">Temps estimé : 2-5 minutes</span>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    console.log("=== FORMULAIRE CHARGÉ ===");
+    console.log("Session ID:", $('#form_session_id').val());
+    
+    // Compteurs de mots
+    function updateWordCounter(textareaId, counterId, minWords = 0) {
+        const textarea = document.getElementById(textareaId);
+        const counter = document.getElementById(counterId);
+        
+        if (!textarea || !counter) return;
+        
+        textarea.addEventListener('input', function() {
+            const text = this.value.trim();
+            const words = text ? text.split(/\s+/).filter(word => word.length > 0).length : 0;
+            
+            counter.textContent = `${words}${minWords > 0 ? '/' + minWords : ''} mots`;
+            
+            if (minWords > 0) {
+                if (words < minWords * 0.5) {
+                    counter.className = 'word-counter error';
+                } else if (words < minWords) {
+                    counter.className = 'word-counter warning';
+                } else {
+                    counter.className = 'word-counter';
+                }
+            }
+        });
+        
+        textarea.dispatchEvent(new Event('input'));
+    }
+    
+    // Initialiser les compteurs
+    updateWordCounter('projectDescription', 'projectDescCounter', 100);
+    updateWordCounter('writingSample', 'writingSampleCounter', 50);
+    updateWordCounter('company_description', 'companyDescCounter');
+    
+    // GESTION DU BOUTON GÉNÉRER - NOUVELLE VERSION POUR REDIRECTION
+    $('#generateButton').click(function() {
+        console.log('🎯 BOUTON "GÉNÉRER" CLIQUE !');
+        
+        // 1. Validation basique
+        if (!$('#agreeTerms').is(':checked')) {
+            alert('Veuillez accepter les conditions d\'utilisation.');
+            return;
+        }
+        
+        // 2. Récupérer TOUTES les données du formulaire
+        const formData = {
+            full_name: $('input[name="full_name"]').val() || 'Étudiant Test',
+            filiere: $('select[name="filiere"]').val() || 'Génie Informatique',
+            project_title: $('input[name="project_title"]').val() || 'Projet de stage',
+            academic_supervisor: $('input[name="academic_supervisor"]').val() || 'Dr. Encadrant',
+            duration: $('select[name="duration"]').val() || '2 mois',
+            academic_year: $('input[name="academic_year"]').val() || '2024-2025',
+            company_name: $('input[name="company_name"]').val() || 'Entreprise Test',
+            company_supervisor: $('input[name="company_supervisor"]').val() || 'M. Superviseur',
+            company_sector: $('select[name="company_sector"]').val() || 'Informatique',
+            company_location: $('input[name="company_location"]').val() || 'Oujda',
+            company_description: $('textarea[name="company_description"]').val() || '',
+            project_description: $('textarea[name="project_description"]').val() || 'Description du projet',
+            technologies: $('input[name="technologies"]').val() || 'Salesforce, Apex',
+            development_tools: $('input[name="development_tools"]').val() || 'VS Code, Git',
+            challenges: $('textarea[name="challenges"]').val() || '',
+            writing_style: $('select[name="writing_style"]').val() || 'académique_formel',
+            target_length: $('select[name="target_length"]').val() || '60-80',
+            academic_level: $('select[name="academic_level"]').val() || 'licence'
+        };
+        
+        console.log('📦 Données envoyées:', formData);
+        
+        // 3. Désactiver le bouton et afficher chargement
+        const btn = $(this);
+        const originalText = btn.html();
+        btn.prop('disabled', true);
+        btn.html('<i class="fas fa-spinner fa-spin me-2"></i>Création du rapport...');
+        
+        // 4. Envoyer la requête AJAX avec jQuery
+        $.ajax({
+            url: '/generate',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            success: function(response) {
+                console.log('✅ Réponse du serveur:', response);
+                
+                if (response.success) {
+                    if (response.redirect_url) {
+                        console.log('🔄 Redirection vers:', response.redirect_url);
+                        // Redirection IMMÉDIATE vers l'éditeur
+                        window.location.href = response.redirect_url;
+                    } else if (response.report_id) {
+                        console.log('📝 Rapport créé, redirection vers éditeur');
+                        window.location.href = '/editor-enhanced/' + response.report_id;
+                    } else {
+                        console.log('⚠️ Pas de URL de redirection, test par défaut');
+                        window.location.href = '/test-nouvel-editeur';
+                    }
+                } else {
+                    console.error('❌ Erreur serveur:', response.error);
+                    alert('Erreur lors de la génération: ' + (response.error || 'Erreur inconnue'));
+                    btn.prop('disabled', false);
+                    btn.html(originalText);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Erreur AJAX:', error);
+                alert('Erreur de connexion au serveur. Vérifiez la console.');
+                btn.prop('disabled', false);
+                btn.html(originalText);
+            }
+        });
+        
+        return false;
+    });
+    
+    // Gestion du bouton test
+    $('#testButton').click(function() {
+        console.log('🚀 Démarrage test éditeur...');
+        const btn = $(this);
+        const originalText = btn.html();
+        btn.prop('disabled', true);
+        btn.html('<i class="fas fa-spinner fa-spin me-2"></i>Chargement de l\'éditeur...');
+        
+        // Redirection vers la route de test
+        setTimeout(function() {
+            window.location.href = '/test-nouvel-editeur';
+        }, 500);
+    });
+    
+    // Fonction de test pour la console
+    window.testRedirection = function() {
+        console.log('🔍 Test de redirection manuel...');
+        fetch('/generate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                full_name: 'Test Redirection',
+                project_title: 'Test Redirection',
+                company_name: 'Test Inc.'
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            console.log('📨 Réponse:', data);
+            if (data.redirect_url) {
+                console.log('✅ Redirection vers:', data.redirect_url);
+                window.location.href = data.redirect_url;
+            } else if (data.report_id) {
+                console.log('✅ Redirection vers éditeur avec ID:', data.report_id);
+                window.location.href = '/editor-enhanced/' + data.report_id;
+            }
+        })
+        .catch(error => console.error('❌ Erreur:', error));
+    };
+    
+    console.log("💡 Pour tester rapidement:");
+    console.log("1. Cliquez sur 'TESTER L'ÉDITEUR STRUCTURÉ' (bouton vert)");
+    console.log("2. Ou remplissez le formulaire et cliquez sur 'Générer le Rapport'");
+    console.log("3. Ou dans la console, tapez: testRedirection()");
+});
+</script>
+{% endblock %}

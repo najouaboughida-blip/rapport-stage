@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+
+{% block title %}Accueil - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="academic-header">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1 class="display-4 fw-bold mb-3">
+                    <i class="fas fa-robot me-2"></i>Générateur Intelligent de Rapports Académiques
+                </h1>
+                <p class="lead mb-4" style="opacity: 0.9;">
+                    Créez des rapports de stage professionnels pour l'ENSA Oujda avec l'aide de l'IA.
+                    Analyse de style personnalisée, génération intelligente et export multi-format.
+                </p>
+                <div class="d-flex flex-wrap gap-3">
+                    <a href="{{ url_for('start_report') }}" class="btn btn-academic btn-lg">
+                        <i class="fas fa-plus-circle me-2"></i>Commencer un nouveau rapport
+                    </a>
+                    <a href="{{ url_for('reference_style') }}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-pen-fancy me-2"></i>Analyser mon style d'écriture
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-4 mt-4 mt-lg-0">
+                <div class="text-center">
+                    <div class="feature-icon mx-auto">
+                        <i class="fas fa-graduation-cap"></i>
+                    </div>
+                    <p class="mt-3 mb-0" style="opacity: 0.9;">
+                        <strong>Pour les étudiants de l'ENSA Oujda</strong><br>
+                        Génie Informatique • Génie Civil • Génie Électrique
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container py-5">
+    <!-- Statistiques -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="academic-card p-4">
+                <div class="row text-center">
+                    <div class="col-md-3 mb-4 mb-md-0">
+                        <h2 class="text-primary fw-bold display-6">500+</h2>
+                        <p class="text-muted mb-0">Rapports générés</p>
+                    </div>
+                    <div class="col-md-3 mb-4 mb-md-0">
+                        <h2 class="text-success fw-bold display-6">98%</h2>
+                        <p class="text-muted mb-0">Satisfaction étudiante</p>
+                    </div>
+                    <div class="col-md-3 mb-4 mb-md-0">
+                        <h2 class="text-info fw-bold display-6">50h</h2>
+                        <p class="text-muted mb-0">Temps moyen économisé</p>
+                    </div>
+                    <div class="col-md-3">
+                        <h2 class="text-warning fw-bold display-6">4.8/5</h2>
+                        <p class="text-muted mb-0">Note moyenne</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comment ça marche -->
+    <div class="row mb-5">
+        <div class="col-12 mb-4">
+            <h2 class="text-center mb-4">
+                <i class="fas fa-cogs me-2"></i>Comment fonctionne notre générateur ?
+            </h2>
+            <p class="text-center text-muted mb-5">
+                Notre approche unique combine analyse de style et intelligence artificielle
+            </p>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="academic-card h-100 p-4">
+                <div class="step-number mb-3">1</div>
+                <h4 class="card-title mb-3">Analyse de Style</h4>
+                <p class="card-text mb-4">
+                    Fournissez un exemple de votre écriture. Notre système analyse votre style,
+                    identifie vos caractéristiques académiques et adapte la génération en conséquence.
+                </p>
+                <div class="text-center">
+                    <i class="fas fa-chart-line fa-3x text-primary"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="academic-card h-100 p-4">
+                <div class="step-number mb-3">2</div>
+                <h4 class="card-title mb-3">Génération Intelligente</h4>
+                <p class="card-text mb-4">
+                    L'IA génère un rapport complet section par section, en respectant votre style
+                    personnel et les normes académiques de l'ENSA Oujda.
+                </p>
+                <div class="text-center">
+                    <i class="fas fa-robot fa-3x text-success"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="academic-card h-100 p-4">
+                <div class="step-number mb-3">3</div>
+                <h4 class="card-title mb-3">Édition & Export</h4>
+                <p class="card-text mb-4">
+                    Personnalisez votre rapport dans l'éditeur intégré, puis exportez-le en PDF
+                    ou Word, prêt à être soumis à votre encadrant.
+                </p>
+                <div class="text-center">
+                    <i class="fas fa-file-export fa-3x text-danger"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Caractéristiques -->
+    <div class="row mb-5">
+        <div class="col-12 mb-4">
+            <h2 class="text-center mb-4">
+                <i class="fas fa-star me-2"></i>Pourquoi choisir notre solution ?
+            </h2>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="academic-card h-100 p-4">
+                <div class="d-flex">
+                    <div class="me-3">
+                        <i class="fas fa-bolt fa-2x text-warning"></i>
+                    </div>
+                    <div>
+                        <h5>Rapide et efficace</h5>
+                        <p class="text-muted mb-0">
+                            Générez un rapport complet en moins de 10 minutes, économisant des
+                            dizaines d'heures de travail.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="academic-card h-100 p-4">
+                <div class="d-flex">
+                    <div class="me-3">
+                        <i class="fas fa-graduation-cap fa-2x text-success"></i>
+                    </div>
+                    <div>
+                        <h5>Format académique garanti</h5>
+                        <p class="text-muted mb-0">
+                            Respect strict des normes ENSA, structure académique appropriée,
+                            style formel requis.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="academic-card h-100 p-4">
+                <div class="d-flex">
+                    <div class="me-3">
+                        <i class="fas fa-edit fa-2x text-info"></i>
+                    </div>
+                    <div>
+                        <h5>Personnalisation complète</h5>
+                        <p class="text-muted mb-0">
+                            Éditeur intégré, modification facile de chaque section,
+                            adaptation à votre style personnel.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="academic-card h-100 p-4">
+                <div class="d-flex">
+                    <div class="me-3">
+                        <i class="fas fa-file-export fa-2x text-danger"></i>
+                    </div>
+                    <div>
+                        <h5>Export multi-format</h5>
+                        <p class="text-muted mb-0">
+                            PDF pour impression, Word pour édition ultérieure,
+                            formats prêts pour soumission.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Témoignages -->
+    <div class="row mb-5">
+        <div class="col-12 mb-4">
+            <h2 class="text-center mb-4">
+                <i class="fas fa-comments me-2"></i>Ce que disent nos utilisateurs
+            </h2>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="academic-card h-100 p-4">
+                <div class="mb-3">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" 
+                             style="width: 50px; height: 50px;">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="ms-3">
+                            <h6 class="mb-0">Ahmed L.</h6>
+                            <small class="text-muted">Génie Informatique</small>
+                        </div>
+                    </div>
+                    <p class="mb-0">
+                        "J'ai économisé plus de 40 heures de travail. Mon rapport était parfaitement
+                        formaté et mon encadrant l'a beaucoup apprécié."
+                    </p>
+                </div>
+                <div class="text-warning">
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="academic-card h-100 p-4">
+                <div class="mb-3">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center" 
+                             style="width: 50px; height: 50px;">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="ms-3">
+                            <h6 class="mb-0">Fatima Z.</h6>
+                            <small class="text-muted">Génie Civil</small>
+                        </div>
+                    </div>
+                    <p class="mb-0">
+                        "L'analyse de style est révolutionnaire. Le rapport ressemble vraiment
+                        à mon écriture, ce n'est pas juste du texte générique."
+                    </p>
+                </div>
+                <div class="text-warning">
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star-half-alt"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="academic-card h-100 p-4">
+                <div class="mb-3">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="rounded-circle bg-info text-white d-flex align-items-center justify-content-center" 
+                             style="width: 50px; height: 50px;">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="ms-3">
+                            <h6 class="mb-0">Mehdi K.</h6>
+                            <small class="text-muted">Génie Électrique</small>
+                        </div>
+                    </div>
+                    <p class="mb-0">
+                        "L'export PDF est impeccable. J'ai pu soumettre mon rapport directement
+                        sans aucune modification supplémentaire."
+                    </p>
+                </div>
+                <div class="text-warning">
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CTA Final -->
+    <div class="row">
+        <div class="col-12">
+            <div class="academic-card p-5 text-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <h2 class="mb-4">Prêt à créer votre rapport professionnel ?</h2>
+                <p class="mb-4 lead" style="opacity: 0.9;">
+                    Rejoignez les centaines d'étudiants qui ont déjà utilisé notre générateur
+                    pour produire des rapports de stage exceptionnels.
+                </p>
+                <div class="d-flex justify-content-center flex-wrap gap-3">
+                    <a href="{{ url_for('start_report') }}" class="btn btn-light btn-lg px-5">
+                        <i class="fas fa-rocket me-2"></i>Commencer maintenant
+                    </a>
+                    <a href="{{ url_for('reference_style') }}" class="btn btn-outline-light btn-lg px-5">
+                        <i class="fas fa-chart-line me-2"></i>Tester l'analyse de style
+                    </a>
+                </div>
+                <p class="mt-4 mb-0" style="opacity: 0.8;">
+                    <small>Gratuit pour tous les étudiants de l'ENSA Oujda</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Animation des statistiques
+    $('.display-6').each(function() {
+        var $this = $(this);
+        var countTo = $this.text().replace('+', '');
+        
+        if (!isNaN(countTo)) {
+            $({ countNum: 0 }).animate({
+                countNum: parseFloat(countTo)
+            }, {
+                duration: 2000,
+                easing: 'swing',
+                step: function() {
+                    $this.text(Math.floor(this.countNum) + ($this.text().includes('+') ? '+' : ''));
+                }
+            });
+        }
+    });
+    
+    // Animation au scroll
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('animate__animated', 'animate__fadeInUp');
+            }
+        });
+    }, observerOptions);
+    
+    // Observer les cartes
+    document.querySelectorAll('.academic-card').forEach((card) => {
+        observer.observe(card);
+    });
+});
+</script>
+{% endblock %}

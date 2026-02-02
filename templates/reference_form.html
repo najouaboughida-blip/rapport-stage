@@ -1,0 +1,676 @@
+{% extends "base.html" %}
+
+{% block title %}Analyse de Style - {{ app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .analysis-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .text-preview {
+        background: white;
+        border: 2px solid #E9ECEF;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        position: relative;
+    }
+    
+    .text-preview-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #E9ECEF;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        border: 1px solid #E9ECEF;
+        transition: transform 0.2s;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .stat-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--primary-color);
+        margin-bottom: 0.25rem;
+    }
+    
+    .stat-label {
+        font-size: 0.875rem;
+        color: var(--text-light);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .feature-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .feature-item {
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        background: #F8F9FA;
+        border-radius: 6px;
+        border-left: 4px solid var(--secondary-color);
+        display: flex;
+        align-items: center;
+    }
+    
+    .feature-item i {
+        color: var(--secondary-color);
+        margin-right: 0.75rem;
+        font-size: 1.25rem;
+    }
+    
+    .recommendation-card {
+        background: linear-gradient(135deg, #FFF3CD 0%, #FFEAA7 100%);
+        border: 1px solid #FFEAA7;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .recommendation-card h6 {
+        color: #856404;
+        margin-bottom: 0.75rem;
+    }
+    
+    .recommendation-card ul {
+        margin-bottom: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .recommendation-card li {
+        margin-bottom: 0.5rem;
+    }
+    
+    .highlight {
+        background-color: #FFF3CD;
+        padding: 0.125rem 0.25rem;
+        border-radius: 3px;
+        font-weight: 500;
+    }
+    
+    .analysis-visualization {
+        height: 200px;
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 2rem;
+        border: 1px solid #E9ECEF;
+    }
+    
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.9);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+    
+    .spinner-analysis {
+        width: 60px;
+        height: 60px;
+        border: 5px solid #F3F3F3;
+        border-top: 5px solid var(--secondary-color);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 1rem;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="analysis-container">
+        <!-- En-tête -->
+        <div class="text-center mb-5">
+            <h1 class="display-5 fw-bold mb-3" style="color: var(--primary-color);">
+                <i class="fas fa-pen-fancy me-2"></i>Analyse de Style d'Écriture
+            </h1>
+            <p class="lead text-muted mb-0">
+                Fournissez un exemple de votre écriture académique pour une génération personnalisée
+            </p>
+        </div>
+
+        <!-- Instructions -->
+        <div class="alert-academic alert-academic-info mb-4">
+            <h6><i class="fas fa-info-circle me-2"></i>Comment fonctionne l'analyse de style ?</h6>
+            <p class="mb-2">Notre système analyse votre texte pour identifier :</p>
+            <ul class="mb-0">
+                <li>Votre niveau de formalité et style académique</li>
+                <li>La structure de vos phrases et paragraphes</li>
+                <li>Votre vocabulaire technique et académique</li>
+                <li>Les connecteurs logiques que vous utilisez</li>
+                <li>Vos caractéristiques d'écriture uniques</li>
+            </ul>
+        </div>
+
+        <!-- Zone de texte -->
+        <div class="text-preview">
+            <div class="text-preview-header">
+                <h5 class="mb-0"><i class="fas fa-edit me-2"></i>Votre texte de référence</h5>
+                <button class="btn btn-sm btn-outline-primary" id="loadExample">
+                    <i class="fas fa-lightbulb me-1"></i>Charger un exemple
+                </button>
+            </div>
+            
+            <textarea class="form-control form-control-academic" 
+                      id="referenceText" 
+                      rows="10"
+                      placeholder="Collez ici un exemple de votre écriture académique (introduction, paragraphe, extrait de rapport)...
+
+Exemple recommandé :
+
+L'introduction générale du présent rapport s'inscrit dans le cadre du stage de fin d'études effectué au sein de l'entreprise Capgemini TS. Ce stage, d'une durée de deux mois, a pour objectif principal la refonte de l'architecture conversationnelle du WinBot, un chatbot destiné à améliorer l'expérience client de l'opérateur INWI.
+
+Dans un premier temps, nous présenterons le contexte général du projet ainsi que la problématique rencontrée. Ensuite, nous détaillerons la méthodologie adoptée pour répondre à cette problématique. Enfin, nous exposerons les résultats obtenus et les perspectives d'amélioration.
+
+Il convient de souligner que ce travail s'appuie sur une analyse approfondie des besoins fonctionnels et techniques, ainsi que sur une revue de la littérature relative aux systèmes conversationnels modernes. Notre approche méthodologique combine une analyse qualitative des besoins avec une évaluation quantitative des performances."></textarea>
+            
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <div class="word-counter" id="textCounter">0 mots • 0 caractères</div>
+                <div>
+                    <span class="badge bg-light text-dark me-2">
+                        <i class="fas fa-font me-1"></i><span id="wordCount">0</span> mots
+                    </span>
+                    <span class="badge bg-light text-dark">
+                        <i class="fas fa-ruler me-1"></i><span id="charCount">0</span> caractères
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bouton d'analyse -->
+        <div class="d-grid mb-5">
+            <button class="btn btn-academic btn-lg" id="analyzeButton">
+                <i class="fas fa-chart-line me-2"></i>Analyser mon style d'écriture
+            </button>
+            <div class="text-center mt-2">
+                <small class="text-muted">
+                    <i class="fas fa-clock me-1"></i>L'analyse prend environ 10-30 secondes
+                </small>
+            </div>
+        </div>
+
+        <!-- Résultats (cachés initialement) -->
+        <div id="analysisResults" style="display: none;">
+            <!-- Statistiques -->
+            <h4 class="mb-4"><i class="fas fa-chart-bar me-2"></i>Statistiques d'écriture</h4>
+            <div class="stats-grid mb-5">
+                <div class="stat-card">
+                    <div class="stat-value" id="statWords">0</div>
+                    <div class="stat-label">Mots</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statSentences">0</div>
+                    <div class="stat-label">Phrases</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statAvgLength">0</div>
+                    <div class="stat-label">Mots/phrase</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statFormality">0%</div>
+                    <div class="stat-label">Formalité</div>
+                </div>
+            </div>
+
+            <!-- Caractéristiques détectées -->
+            <h4 class="mb-4"><i class="fas fa-search me-2"></i>Caractéristiques détectées</h4>
+            <div class="row mb-5">
+                <div class="col-md-6 mb-4">
+                    <div class="academic-card p-4 h-100">
+                        <h6 class="mb-3"><i class="fas fa-language me-2 text-primary"></i>Style d'écriture</h6>
+                        <ul class="feature-list" id="styleFeatures">
+                            <!-- Rempli par JavaScript -->
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="academic-card p-4 h-100">
+                        <h6 class="mb-3"><i class="fas fa-book me-2 text-success"></i>Vocabulaire académique</h6>
+                        <ul class="feature-list" id="vocabularyFeatures">
+                            <!-- Rempli par JavaScript -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommandations -->
+            <h4 class="mb-4"><i class="fas fa-lightbulb me-2"></i>Recommandations personnalisées</h4>
+            <div class="recommendation-card" id="recommendations">
+                <!-- Rempli par JavaScript -->
+            </div>
+
+            <!-- Exemple de prompt généré -->
+            <h4 class="mb-4"><i class="fas fa-robot me-2"></i>Exemple de prompt généré</h4>
+            <div class="academic-card p-4 mb-5">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0"><i class="fas fa-code me-2"></i>Prompt académique personnalisé</h6>
+                    <button class="btn btn-sm btn-outline-primary" id="copyPrompt">
+                        <i class="fas fa-copy me-1"></i>Copier
+                    </button>
+                </div>
+                <div class="form-control form-control-academic" 
+                     style="height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.875rem;"
+                     id="generatedPrompt">
+                    <!-- Rempli par JavaScript -->
+                </div>
+                <div class="text-end mt-2">
+                    <small class="text-muted">Ce prompt sera utilisé pour générer votre rapport</small>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="row mb-5">
+                <div class="col-md-6 mb-3">
+                    <div class="d-grid">
+                        <a href="{{ url_for('start_report') }}" class="btn btn-academic-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Retour au formulaire
+                        </a>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="d-grid">
+                        <button class="btn btn-academic" id="continueButton">
+                            <i class="fas fa-forward me-2"></i>Continuer avec ce style
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overlay de chargement -->
+        <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+            <div class="spinner-analysis"></div>
+            <h5 class="mt-3">Analyse en cours</h5>
+            <p class="text-muted">Identification des caractéristiques de votre style d'écriture...</p>
+            <div class="progress progress-academic mt-3" style="width: 300px;">
+                <div class="progress-bar" role="progressbar" style="width: 0%" id="analysisProgress"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Exemple de texte académique
+    const exampleText = `L'introduction générale du présent rapport s'inscrit dans le cadre du stage de fin d'études effectué au sein de l'entreprise Capgemini TS. Ce stage, d'une durée de deux mois, a pour objectif principal la refonte de l'architecture conversationnelle du WinBot, un chatbot destiné à améliorer l'expérience client de l'opérateur INWI.
+
+Dans un premier temps, nous présenterons le contexte général du projet ainsi que la problématique rencontrée. Ensuite, nous détaillerons la méthodologie adoptée pour répondre à cette problématique. Enfin, nous exposerons les résultats obtenus et les perspectives d'amélioration.
+
+Il convient de souligner que ce travail s'appuie sur une analyse approfondie des besoins fonctionnels et techniques, ainsi que sur une revue de la littérature relative aux systèmes conversationnels modernes. Notre approche méthodologique combine une analyse qualitative des besoins avec une évaluation quantitative des performances.
+
+Les résultats obtenus démontrent une amélioration significative de l'efficacité du système conversationnel, tout en réduisant les coûts de maintenance. Ces conclusions ouvrent des perspectives intéressantes pour l'optimisation des interfaces conversationnelles dans le secteur des télécommunications.`;
+
+    // Charger l'exemple
+    $('#loadExample').click(function() {
+        $('#referenceText').val(exampleText);
+        updateCounters();
+    });
+
+    // Mettre à jour les compteurs
+    function updateCounters() {
+        const text = $('#referenceText').val();
+        const words = text ? text.trim().split(/\s+/).filter(word => word.length > 0).length : 0;
+        const chars = text ? text.length : 0;
+        const sentences = text ? text.split(/[.!?]+/).filter(s => s.trim().length > 0).length : 0;
+        
+        $('#textCounter').text(`${words} mots • ${chars} caractères`);
+        $('#wordCount').text(words);
+        $('#charCount').text(chars);
+        
+        return { words, chars, sentences };
+    }
+
+    // Initialiser les compteurs
+    $('#referenceText').on('input', updateCounters);
+    updateCounters();
+
+    // Analyse de style
+    $('#analyzeButton').click(function() {
+        const text = $('#referenceText').val().trim();
+        
+        if (!text || text.length < 100) {
+            alert('Veuillez fournir un texte d\'au moins 100 caractères pour l\'analyse.');
+            return;
+        }
+
+        // Afficher le chargement
+        $('#loadingOverlay').show();
+        
+        // Simuler la progression
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += Math.random() * 10;
+            if (progress > 100) progress = 100;
+            $('#analysisProgress').css('width', `${progress}%`);
+            
+            if (progress >= 100) {
+                clearInterval(progressInterval);
+                // Continuer avec l'analyse réelle
+                performAnalysis(text);
+            }
+        }, 200);
+    });
+
+    // Effectuer l'analyse
+    function performAnalysis(text) {
+        // Envoyer au serveur pour analyse réelle
+        $.ajax({
+            url: '/style-analysis',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                reference_text: text,
+                student: {},
+                company: {}
+            }),
+            success: function(response) {
+                if (response.success) {
+                    // Traiter la réponse
+                    displayAnalysisResults(response.style_report);
+                    
+                    // Stocker la session
+                    sessionStorage.setItem('currentSession', JSON.stringify({
+                        session_id: response.session_id,
+                        style_report: response.style_report
+                    }));
+                } else {
+                    alert('Erreur lors de l\'analyse: ' + response.error);
+                }
+            },
+            error: function() {
+                // Fallback à l'analyse locale
+                const localAnalysis = analyzeTextLocally(text);
+                displayAnalysisResults(localAnalysis);
+            },
+            complete: function() {
+                // Cacher le chargement
+                $('#loadingOverlay').hide();
+            }
+        });
+    }
+
+    // Analyse locale (fallback)
+    function analyzeTextLocally(text) {
+        const words = text.split(/\s+/).filter(w => w.length > 0);
+        const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+        const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+        
+        // Calculer des statistiques simples
+        const avgSentenceLength = words.length / Math.max(sentences.length, 1);
+        const formalityScore = calculateFormalityScore(text);
+        
+        // Caractéristiques détectées
+        const features = detectFeatures(text);
+        
+        return {
+            summary: {
+                word_count: words.length,
+                sentence_count: sentences.length,
+                paragraph_count: paragraphs.length,
+                avg_sentence_length: Math.round(avgSentenceLength),
+                formality_score: formalityScore,
+                formality_level: getFormalityLevel(formalityScore)
+            },
+            features: features,
+            recommendations: generateRecommendations(words.length, avgSentenceLength, formalityScore, features)
+        };
+    }
+
+    // Calculer le score de formalité
+    function calculateFormalityScore(text) {
+        const formalIndicators = ['nous', 'il convient', 'souligner', 'par conséquent', 'cependant', 'en outre'];
+        const informalIndicators = ['je', 'moi', 'perso', 'super', 'genre', 'trop'];
+        
+        let formalCount = 0;
+        let informalCount = 0;
+        
+        const textLower = text.toLowerCase();
+        
+        formalIndicators.forEach(indicator => {
+            formalCount += (textLower.match(new RegExp(indicator, 'g')) || []).length;
+        });
+        
+        informalIndicators.forEach(indicator => {
+            informalCount += (textLower.match(new RegExp(indicator, 'g')) || []).length;
+        });
+        
+        const total = formalCount + informalCount;
+        return total > 0 ? Math.round((formalCount / total) * 100) : 50;
+    }
+
+    function getFormalityLevel(score) {
+        if (score >= 80) return 'Très formel';
+        if (score >= 60) return 'Formel';
+        if (score >= 40) return 'Modéré';
+        return 'Informel';
+    }
+
+    // Détecter les caractéristiques
+    function detectFeatures(text) {
+        const features = [];
+        const textLower = text.toLowerCase();
+        
+        // Structure
+        if (text.includes('1.') || text.includes('I.') || text.includes('Premièrement')) {
+            features.push('Structure hiérarchique');
+        }
+        
+        if (textLower.includes('dans un premier temps') || textLower.includes('ensuite') || textLower.includes('enfin')) {
+            features.push('Transition logique');
+        }
+        
+        // Vocabulaire académique
+        const academicWords = ['problématique', 'méthodologie', 'hypothèse', 'cadre théorique', 'revue de littérature'];
+        const foundAcademic = academicWords.filter(word => textLower.includes(word));
+        if (foundAcademic.length > 0) {
+            features.push('Vocabulaire académique: ' + foundAcademic.slice(0, 3).join(', '));
+        }
+        
+        // Connecteurs
+        const connectors = ['par ailleurs', 'cependant', 'toutefois', 'néanmoins', 'par conséquent', 'ainsi'];
+        const foundConnectors = connectors.filter(connector => textLower.includes(connector));
+        if (foundConnectors.length > 0) {
+            features.push('Connecteurs logiques');
+        }
+        
+        // Style
+        if (textLower.includes('nous') && !textLower.includes('je ')) {
+            features.push('Utilisation du "nous académique"');
+        }
+        
+        return features;
+    }
+
+    // Générer des recommandations
+    function generateRecommendations(wordCount, avgSentenceLength, formalityScore, features) {
+        const recommendations = [];
+        
+        if (wordCount < 200) {
+            recommendations.push('Votre texte est court. Pour une meilleure analyse, fournissez au moins 200 mots.');
+        }
+        
+        if (avgSentenceLength > 30) {
+            recommendations.push('Vos phrases sont longues (>30 mots). Essayez de les diviser pour améliorer la lisibilité.');
+        } else if (avgSentenceLength < 15) {
+            recommendations.push('Vos phrases sont courtes (<15 mots). Combinez certaines phrases pour créer un texte plus fluide.');
+        }
+        
+        if (formalityScore < 40) {
+            recommendations.push('Votre style est informel. Pour un rapport académique, utilisez plus le "nous" et évitez le "je".');
+        }
+        
+        if (!features.includes('Utilisation du "nous académique"')) {
+            recommendations.push('Privilégiez le "nous académique" au "je" pour plus de formalité.');
+        }
+        
+        return recommendations;
+    }
+
+    // Afficher les résultats
+    function displayAnalysisResults(analysis) {
+        const summary = analysis.summary || analysis;
+        
+        // Mettre à jour les statistiques
+        $('#statWords').text(summary.word_count || '0');
+        $('#statSentences').text(summary.sentence_count || '0');
+        $('#statAvgLength').text(summary.avg_sentence_length || '0');
+        $('#statFormality').text((summary.formality_score || '0') + '%');
+        
+        // Afficher les caractéristiques
+        displayFeatures(analysis.features || []);
+        
+        // Afficher les recommandations
+        displayRecommendations(analysis.recommendations || []);
+        
+        // Générer un exemple de prompt
+        generateExamplePrompt(summary);
+        
+        // Afficher les résultats
+        $('#analysisResults').show();
+        
+        // Scroll vers les résultats
+        $('html, body').animate({
+            scrollTop: $('#analysisResults').offset().top - 100
+        }, 500);
+    }
+
+    function displayFeatures(features) {
+        const styleFeatures = $('#styleFeatures');
+        const vocabularyFeatures = $('#vocabularyFeatures');
+        
+        styleFeatures.empty();
+        vocabularyFeatures.empty();
+        
+        features.forEach(feature => {
+            const li = $('<li class="feature-item"></li>');
+            
+            if (feature.includes('Vocabulaire')) {
+                li.html('<i class="fas fa-book"></i>' + feature);
+                vocabularyFeatures.append(li);
+            } else {
+                li.html('<i class="fas fa-check-circle"></i>' + feature);
+                styleFeatures.append(li);
+            }
+        });
+        
+        // Si pas de caractéristiques
+        if (styleFeatures.children().length === 0) {
+            styleFeatures.append('<li class="feature-item"><i class="fas fa-info-circle"></i>Aucune caractéristique spécifique détectée</li>');
+        }
+        
+        if (vocabularyFeatures.children().length === 0) {
+            vocabularyFeatures.append('<li class="feature-item"><i class="fas fa-info-circle"></i>Vocabulaire académique standard</li>');
+        }
+    }
+
+    function displayRecommendations(recommendations) {
+        const container = $('#recommendations');
+        container.empty();
+        
+        if (recommendations.length === 0) {
+            container.html(`
+                <h6><i class="fas fa-check-circle me-2 text-success"></i>Style académique approprié</h6>
+                <p class="mb-0">Votre style d'écriture est bien adapté aux rapports académiques. Aucune recommandation majeure.</p>
+            `);
+            return;
+        }
+        
+        let html = '<h6><i class="fas fa-lightbulb me-2 text-warning"></i>Recommandations d\'amélioration</h6><ul>';
+        
+        recommendations.forEach(rec => {
+            html += `<li>${rec}</li>`;
+        });
+        
+        html += '</ul>';
+        container.html(html);
+    }
+
+    function generateExamplePrompt(summary) {
+        const prompt = `Tu es un assistant académique spécialisé dans la rédaction de rapports de stage.
+
+Style d'écriture à reproduire :
+- Niveau de formalité : ${summary.formality_level || 'Formel'}
+- Longueur moyenne des phrases : ${summary.avg_sentence_length || 20} mots
+- Structure : ${summary.features && summary.features.includes('Structure hiérarchique') ? 'Hiérarchique avec numérotation' : 'Paragraphes fluides'}
+- Vocabulaire : ${summary.features && summary.features.some(f => f.includes('Vocabulaire académique')) ? 'Académique technique' : 'Académique standard'}
+
+Instructions spécifiques :
+1. Utiliser le ${summary.formality_score >= 60 ? '"nous académique"' : 'style formel adapté'}
+2. Phrases de ${Math.max(15, Math.min(25, summary.avg_sentence_length || 20))}-${Math.max(25, Math.min(35, (summary.avg_sentence_length || 20) + 5))} mots en moyenne
+3. ${summary.features && summary.features.includes('Transition logique') ? 'Utiliser des connecteurs logiques' : 'Structurer avec des transitions claires'}
+4. Respecter les normes académiques ENSA
+
+Produire un texte clair, structuré et professionnel.`;
+
+        $('#generatedPrompt').text(prompt);
+    }
+
+    // Copier le prompt
+    $('#copyPrompt').click(function() {
+        const promptText = $('#generatedPrompt').text();
+        navigator.clipboard.writeText(promptText).then(() => {
+            const originalHtml = $(this).html();
+            $(this).html('<i class="fas fa-check me-1"></i>Copié !');
+            setTimeout(() => {
+                $(this).html(originalHtml);
+            }, 2000);
+        });
+    });
+
+    // Continuer avec ce style
+    $('#continueButton').click(function() {
+        const text = $('#referenceText').val().trim();
+        
+        if (!text || text.length < 100) {
+            alert('Veuillez d\'abord analyser votre texte.');
+            return;
+        }
+
+        // Stocker dans localStorage pour le formulaire principal
+        localStorage.setItem('writingSample', text);
+        
+        // Rediriger vers le formulaire principal
+        window.location.href = "{{ url_for('start_report') }}";
+    });
+});
+</script>
+{% endblock %}

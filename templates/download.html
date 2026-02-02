@@ -1,0 +1,567 @@
+{% extends "base.html" %}
+
+{% block title %}Téléchargement - {{ app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .download-hero {
+        background: linear-gradient(135deg, var(--primary-color) 0%, #1A2530 100%);
+        color: white;
+        padding: 3rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0 0 20px 20px;
+    }
+    
+    .format-card {
+        border: 2px solid transparent;
+        border-radius: 12px;
+        padding: 2rem;
+        height: 100%;
+        transition: all 0.3s;
+        background: white;
+    }
+    
+    .format-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+    }
+    
+    .format-card.pdf {
+        border-color: #FF6B6B;
+    }
+    
+    .format-card.word {
+        border-color: #2E86C1;
+    }
+    
+    .format-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        font-size: 2rem;
+    }
+    
+    .format-icon.pdf {
+        background: linear-gradient(135deg, #FF6B6B 0%, #C0392B 100%);
+        color: white;
+    }
+    
+    .format-icon.word {
+        background: linear-gradient(135deg, #2E86C1 0%, #1B4F72 100%);
+        color: white;
+    }
+    
+    .report-summary {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        border: 1px solid var(--border-color);
+    }
+    
+    .section-progress {
+        margin: 2rem 0;
+    }
+    
+    .progress-section {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.75rem;
+        padding: 0.75rem;
+        background: #F8F9FA;
+        border-radius: 8px;
+        transition: all 0.2s;
+    }
+    
+    .progress-section:hover {
+        background: #E8F4FC;
+        transform: translateX(5px);
+    }
+    
+    .section-status {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        font-size: 0.875rem;
+        font-weight: bold;
+    }
+    
+    .section-status.complete {
+        background: #27AE60;
+        color: white;
+    }
+    
+    .section-status.partial {
+        background: #F39C12;
+        color: white;
+    }
+    
+    .section-status.incomplete {
+        background: #BDC3C7;
+        color: white;
+    }
+    
+    .quality-checklist {
+        background: linear-gradient(135deg, #FFF3CD 0%, #FFEAA7 100%);
+        border: 1px solid #FFEAA7;
+        border-radius: 12px;
+        padding: 2rem;
+        margin: 2rem 0;
+    }
+    
+    .checklist-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .checklist-item i {
+        margin-right: 1rem;
+        font-size: 1.25rem;
+    }
+    
+    .checklist-item.valid i {
+        color: #27AE60;
+    }
+    
+    .checklist-item.invalid i {
+        color: #E74C3C;
+    }
+    
+    .download-actions {
+        position: sticky;
+        bottom: 0;
+        background: white;
+        padding: 1.5rem;
+        border-top: 2px solid var(--border-color);
+        margin-top: 2rem;
+    }
+    
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        
+        .format-card {
+            border: 1px solid #ddd !important;
+            box-shadow: none !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="download-hero">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1 class="display-5 fw-bold mb-3">
+                    <i class="fas fa-download me-2"></i>Votre rapport est prêt !
+                </h1>
+                <p class="lead mb-0" style="opacity: 0.9;">
+                    Téléchargez votre rapport de stage dans le format de votre choix.
+                    Prêt à être soumis à votre encadrant.
+                </p>
+            </div>
+            <div class="col-lg-4 text-lg-end">
+                <div class="d-inline-block bg-white text-dark rounded-pill px-4 py-2">
+                    <i class="fas fa-check-circle text-success me-2"></i>
+                    <strong>Rapport complet</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container py-5">
+    <!-- Résumé du rapport -->
+    <div class="report-summary">
+        <div class="row">
+            <div class="col-md-8">
+                <h3 class="mb-3">
+                    <i class="fas fa-file-alt me-2"></i>
+                    {{ report.student.project_title if report.student else 'Rapport de stage' }}
+                </h3>
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <p class="mb-2"><strong>Auteur :</strong> {{ report.student.full_name if report.student else 'Non spécifié' }}</p>
+                        <p class="mb-2"><strong>Filière :</strong> {{ report.student.filiere if report.student else 'Non spécifié' }}</p>
+                        <p class="mb-2"><strong>Entreprise :</strong> {{ report.company.name if report.company else 'Non spécifié' }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="mb-2"><strong>Date de génération :</strong> {{ report.generated_at[:10] if report.generated_at else 'Aujourd\'hui' }}</p>
+                        <p class="mb-2"><strong>Sections :</strong> {{ report.sections|length }}/12</p>
+                        <p class="mb-0"><strong>Statut :</strong> 
+                            <span class="badge bg-{{ 'success' if report.status == 'complete' else 'warning' }}">
+                                {{ report.status|default('en cours') }}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center">
+                    <div class="display-6 fw-bold text-primary mb-2">
+                        {{ ((report.sections|length / 12) * 100)|round }}%
+                    </div>
+                    <div class="progress progress-academic mb-2">
+                        <div class="progress-bar" style="width: {{ ((report.sections|length / 12) * 100)|round }}%"></div>
+                    </div>
+                    <small class="text-muted">Progression du rapport</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formats de téléchargement -->
+    <div class="row mb-5">
+        <div class="col-12 mb-4">
+            <h3 class="text-center mb-4">
+                <i class="fas fa-file-export me-2"></i>Choisissez votre format
+            </h3>
+            <p class="text-center text-muted mb-5">
+                Sélectionnez le format le plus adapté à vos besoins
+            </p>
+        </div>
+        
+        <!-- PDF -->
+        <div class="col-lg-6 mb-4">
+            <div class="format-card pdf">
+                <div class="format-icon pdf">
+                    <i class="fas fa-file-pdf"></i>
+                </div>
+                <h4 class="text-center mb-3">Format PDF</h4>
+                <p class="text-center text-muted mb-4">
+                    Idéal pour impression et soumission officielle.
+                    Préserve parfaitement la mise en page et les styles.
+                </p>
+                <ul class="mb-4">
+                    <li><i class="fas fa-check text-success me-2"></i>Mise en page académique optimisée</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Prêt pour impression immédiate</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Polices intégrées</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Numérotation automatique des pages</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Table des matières cliquable</li>
+                </ul>
+                <div class="d-grid">
+                    <a href="{{ url_for('export_pdf', session_id=session_id) }}" 
+                       class="btn btn-danger btn-lg">
+                        <i class="fas fa-download me-2"></i>Télécharger PDF
+                    </a>
+                </div>
+                <div class="text-center mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        Génération : 10-30 secondes
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Word -->
+        <div class="col-lg-6 mb-4">
+            <div class="format-card word">
+                <div class="format-icon word">
+                    <i class="fas fa-file-word"></i>
+                </div>
+                <h4 class="text-center mb-3">Format Word</h4>
+                <p class="text-center text-muted mb-4">
+                    Parfait pour modifications ultérieures.
+                    Compatible avec Microsoft Word et LibreOffice.
+                </p>
+                <ul class="mb-4">
+                    <li><i class="fas fa-check text-success me-2"></i>Éditable et modifiable</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Styles Word prédéfinis</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Compatibilité totale</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Table des matières automatique</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Images et tableaux préservés</li>
+                </ul>
+                <div class="d-grid">
+                    <a href="{{ url_for('export_word', session_id=session_id) }}" 
+                       class="btn btn-primary btn-lg">
+                        <i class="fas fa-download me-2"></i>Télécharger Word
+                    </a>
+                </div>
+                <div class="text-center mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        Génération : 5-15 secondes
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progression des sections -->
+    <div class="section-progress">
+        <h4 class="mb-4">
+            <i class="fas fa-list-check me-2"></i>Contenu généré
+        </h4>
+        
+        <div class="row">
+            {% set sections_list = [
+                ('cover_page', 'Page de couverture', 'fas fa-file-invoice'),
+                ('thanks', 'Remerciements', 'fas fa-hands-helping'),
+                ('abstract', 'Résumés', 'fas fa-language'),
+                ('introduction', 'Introduction', 'fas fa-door-open'),
+                ('company_presentation', 'Présentation entreprise', 'fas fa-building'),
+                ('methodology', 'Méthodologie', 'fas fa-cogs'),
+                ('realization', 'Réalisation technique', 'fas fa-code'),
+                ('results', 'Résultats', 'fas fa-chart-bar'),
+                ('conclusion', 'Conclusion', 'fas fa-flag-checkered'),
+                ('bibliography', 'Bibliographie', 'fas fa-book'),
+                ('annexes', 'Annexes', 'fas fa-paperclip')
+            ] %}
+            
+            {% for section_id, section_name, icon in sections_list %}
+            <div class="col-md-6 mb-3">
+                <div class="progress-section">
+                    <div class="section-status 
+                        {% if section_id in report.sections and report.sections[section_id]|length > 100 %}
+                            complete
+                        {% elif section_id in report.sections %}
+                            partial
+                        {% else %}
+                            incomplete
+                        {% endif %}">
+                        {% if section_id in report.sections and report.sections[section_id]|length > 100 %}
+                            <i class="fas fa-check"></i>
+                        {% elif section_id in report.sections %}
+                            ~
+                        {% else %}
+                            ...
+                        {% endif %}
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between">
+                            <strong>{{ section_name }}</strong>
+                            <span class="text-muted">
+                                {% if section_id in report.sections %}
+                                    {{ report.sections[section_id]|striptags|wordcount }} mots
+                                {% else %}
+                                    0 mots
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="progress progress-academic mt-1" style="height: 4px;">
+                            <div class="progress-bar" style="width: 
+                                {% if section_id in report.sections and report.sections[section_id]|length > 500 %}
+                                    100%
+                                {% elif section_id in report.sections %}
+                                    {{ (report.sections[section_id]|length / 500 * 100)|round }}%
+                                {% else %}
+                                    0%
+                                {% endif %}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Checklist de qualité -->
+    <div class="quality-checklist">
+        <h4 class="mb-4">
+            <i class="fas fa-clipboard-check me-2"></i>Vérification de qualité
+        </h4>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="checklist-item valid">
+                    <i class="fas fa-check-circle"></i>
+                    <div>
+                        <strong>Structure académique</strong>
+                        <p class="mb-0 small">Toutes les sections obligatoires sont présentes</p>
+                    </div>
+                </div>
+                
+                <div class="checklist-item 
+                    {% if report.sections|length >= 8 %}valid{% else %}invalid{% endif %}">
+                    <i class="fas {% if report.sections|length >= 8 %}fa-check-circle{% else %}fa-times-circle{% endif %}"></i>
+                    <div>
+                        <strong>Contenu suffisant</strong>
+                        <p class="mb-0 small">
+                            {{ report.sections|length }}/12 sections complétées
+                            {% if report.sections|length < 8 %}
+                            <span class="text-danger">(minimum 8 recommandé)</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="checklist-item valid">
+                    <i class="fas fa-check-circle"></i>
+                    <div>
+                        <strong>Style académique</strong>
+                        <p class="mb-0 small">Respect des normes de formalité</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="checklist-item valid">
+                    <i class="fas fa-check-circle"></i>
+                    <div>
+                        <strong>Mise en page</strong>
+                        <p class="mb-0 small">Formatage adapté à l'impression</p>
+                    </div>
+                </div>
+                
+                <div class="checklist-item 
+                    {% if report.student and report.student.full_name and report.student.project_title %}valid{% else %}invalid{% endif %}">
+                    <i class="fas {% if report.student and report.student.full_name and report.student.project_title %}fa-check-circle{% else %}fa-times-circle{% endif %}"></i>
+                    <div>
+                        <strong>Informations complètes</strong>
+                        <p class="mb-0 small">
+                            {% if report.student and report.student.full_name and report.student.project_title %}
+                            Étudiant et projet identifiés
+                            {% else %}
+                            Informations manquantes
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="checklist-item valid">
+                    <i class="fas fa-check-circle"></i>
+                    <div>
+                        <strong>Export multi-format</strong>
+                        <p class="mb-0 small">PDF et Word disponibles</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alert alert-warning mt-4 mb-0">
+            <h6><i class="fas fa-exclamation-triangle me-2"></i>Vérifications recommandées avant soumission</h6>
+            <ul class="mb-0">
+                <li>Vérifiez l'orthographe et la grammaire</li>
+                <li>Confirmez les informations personnelles et professionnelles</li>
+                <li>Assurez-vous de la cohérence du style sur tout le document</li>
+                <li>Vérifiez la pagination et la table des matières</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Actions supplémentaires -->
+    <div class="download-actions no-print">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <a href="{{ url_for('editor', session_id=session_id) }}" 
+                   class="btn btn-outline-primary w-100">
+                    <i class="fas fa-edit me-2"></i>Retour à l'éditeur
+                </a>
+            </div>
+            <div class="col-md-4 mb-3">
+                <button class="btn btn-outline-success w-100" onclick="window.print()">
+                    <i class="fas fa-print me-2"></i>Imprimer cette page
+                </button>
+            </div>
+            <div class="col-md-4 mb-3">
+                <a href="{{ url_for('start_report') }}" 
+                   class="btn btn-outline-secondary w-100">
+                    <i class="fas fa-plus me-2"></i>Nouveau rapport
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions importantes -->
+    <div class="alert alert-info mt-4">
+        <h5><i class="fas fa-info-circle me-2"></i>Informations importantes</h5>
+        <div class="row">
+            <div class="col-md-6">
+                <h6><i class="fas fa-save me-2"></i>Sauvegarde</h6>
+                <ul class="mb-0">
+                    <li>Les rapports sont automatiquement sauvegardés</li>
+                    <li>Conservez une copie locale des fichiers exportés</li>
+                    <li>Les données sont conservées pendant 7 jours</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6><i class="fas fa-shield-alt me-2"></i>Sécurité</h6>
+                <ul class="mb-0">
+                    <li>Vos données sont traitées de manière confidentielle</li>
+                    <li>Aucune information personnelle n'est partagée</li>
+                    <li>Suppression automatique après expiration</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Animation des pourcentages
+    $('.progress-section .progress-bar').each(function() {
+        const $this = $(this);
+        const width = $this.css('width');
+        $this.css('width', '0');
+        
+        setTimeout(() => {
+            $this.animate({
+                width: width
+            }, 1000);
+        }, 500);
+    });
+    
+    // Téléchargement automatique (optionnel)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('autoDownload') === 'true') {
+        setTimeout(() => {
+            window.location.href = "{{ url_for('export_pdf', session_id=session_id) }}";
+        }, 2000);
+    }
+    
+    // Compteur de téléchargements
+    let downloadCount = localStorage.getItem('downloadCount') || 0;
+    
+    $('a[href*="export"]').click(function() {
+        downloadCount++;
+        localStorage.setItem('downloadCount', downloadCount);
+        
+        // Notification
+        if (downloadCount === 1) {
+            alert('Premier téléchargement réussi ! Pensez à vérifier votre document avant soumission.');
+        }
+    });
+    
+    // Générer un résumé
+    function generateSummary() {
+        let summary = `Résumé du rapport :
+        
+Auteur : {{ report.student.full_name if report.student else 'Non spécifié' }}
+Titre : {{ report.student.project_title if report.student else 'Non spécifié' }}
+Sections complétées : {{ report.sections|length }}/12
+Date : ${new Date().toLocaleDateString('fr-FR')}
+        
+---`;
+        
+        // Copier dans le presse-papier
+        navigator.clipboard.writeText(summary).then(() => {
+            alert('Résumé copié dans le presse-papier !');
+        });
+    }
+    
+    // Bouton pour copier le résumé
+    $('.download-actions').append(`
+        <div class="col-12 mt-3">
+            <button class="btn btn-outline-info w-100" onclick="generateSummary()">
+                <i class="fas fa-copy me-2"></i>Copier le résumé
+            </button>
+        </div>
+    `);
+});
+</script>
+{% endblock %}

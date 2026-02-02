@@ -1,0 +1,583 @@
+{% extends "base.html" %}
+
+{% block title %}Résultats d'Analyse - {{ app_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .analysis-report {
+        background: white;
+        border-radius: 12px;
+        padding: 2.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+    
+    .score-meter {
+        height: 20px;
+        background: linear-gradient(90deg, 
+            #E74C3C 0%, 
+            #F39C12 25%, 
+            #F1C40F 50%, 
+            #2ECC71 75%, 
+            #27AE60 100%);
+        border-radius: 10px;
+        margin: 1rem 0;
+        position: relative;
+    }
+    
+    .score-indicator {
+        position: absolute;
+        top: -5px;
+        width: 30px;
+        height: 30px;
+        background: white;
+        border: 3px solid var(--primary-color);
+        border-radius: 50%;
+        transform: translateX(-50%);
+    }
+    
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin: 2rem 0;
+    }
+    
+    .metric-card {
+        background: #F8F9FA;
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-align: center;
+        transition: transform 0.2s;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: var(--primary-color);
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-label {
+        font-size: 0.875rem;
+        color: var(--text-light);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .analysis-section {
+        margin-bottom: 3rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px solid #E9ECEF;
+    }
+    
+    .feature-tag {
+        display: inline-block;
+        background: #E8F4FC;
+        color: var(--secondary-color);
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        margin: 0.25rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .improvement-card {
+        background: linear-gradient(135deg, #FFF3CD 0%, #FFEAA7 100%);
+        border: 1px solid #FFEAA7;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 1.5rem 0;
+    }
+    
+    .chart-container {
+        height: 300px;
+        margin: 2rem 0;
+        position: relative;
+    }
+    
+    .next-steps {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-top: 3rem;
+    }
+    
+    .next-steps .btn-light {
+        color: var(--primary-color);
+        font-weight: 500;
+    }
+    
+    .export-options {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    
+    .export-btn {
+        flex: 1;
+        min-width: 200px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- En-tête du rapport -->
+            <div class="text-center mb-5">
+                <h1 class="display-5 fw-bold mb-3" style="color: var(--primary-color);">
+                    <i class="fas fa-chart-line me-2"></i>Rapport d'Analyse de Style
+                </h1>
+                <p class="lead text-muted">
+                    Analyse détaillée de votre style d'écriture académique
+                </p>
+                <div class="d-flex justify-content-center flex-wrap gap-2 mt-3">
+                    <span class="badge-academic">
+                        <i class="fas fa-calendar me-1"></i>
+                        Généré le {{ style_report.timestamp if style_report.timestamp else "Aujourd'hui" }}
+                    </span>
+                    <span class="badge bg-success">
+                        <i class="fas fa-check-circle me-1"></i>
+                        Analyse complétée
+                    </span>
+                    {% if style_report.summary %}
+                    <span class="badge bg-info">
+                        Niveau : {{ style_report.summary.academic_level|default("Académique") }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Rapport principal -->
+            <div class="analysis-report">
+                <!-- Résumé exécutif -->
+                <div class="analysis-section">
+                    <h3 class="mb-4">
+                        <i class="fas fa-clipboard-check me-2"></i>Résumé exécutif
+                    </h3>
+                    
+                    {% if style_report.summary %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="metric-grid">
+                                <div class="metric-card">
+                                    <div class="metric-value">{{ style_report.summary.formality_score|default(0) }}%</div>
+                                    <div class="metric-label">Formalité</div>
+                                    <div class="score-meter mt-3">
+                                        <div class="score-indicator" 
+                                             style="left: {{ style_report.summary.formality_score|default(50) }}%;"></div>
+                                    </div>
+                                    <small class="text-muted">
+                                        {{ style_report.summary.formality_level|default("Modéré") }}
+                                    </small>
+                                </div>
+                                
+                                <div class="metric-card">
+                                    <div class="metric-value">{{ style_report.summary.complexity|default("Moyenne") }}</div>
+                                    <div class="metric-label">Complexité</div>
+                                    <div class="mt-3">
+                                        {% set complexity = style_report.summary.complexity|default("moyenne") %}
+                                        {% if complexity == "simple" %}
+                                            <i class="fas fa-chart-bar text-success fa-2x"></i>
+                                        {% elif complexity == "moyenne" %}
+                                            <i class="fas fa-chart-line text-warning fa-2x"></i>
+                                        {% else %}
+                                            <i class="fas fa-chart-area text-primary fa-2x"></i>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="metric-grid">
+                                <div class="metric-card">
+                                    <div class="metric-value">{{ style_report.summary.vocabulary|default("Standard") }}</div>
+                                    <div class="metric-label">Vocabulaire</div>
+                                    <div class="mt-3">
+                                        {% set vocab = style_report.summary.vocabulary|default("standard") %}
+                                        {% if vocab == "riche" %}
+                                            <i class="fas fa-book-open text-success fa-2x"></i>
+                                        {% elif vocab == "standard" %}
+                                            <i class="fas fa-book text-warning fa-2x"></i>
+                                        {% else %}
+                                            <i class="fas fa-bookmark text-info fa-2x"></i>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                
+                                <div class="metric-card">
+                                    <div class="metric-value">{{ style_report.summary.technical_terms_count|default(0) }}</div>
+                                    <div class="metric-label">Termes techniques</div>
+                                    <div class="mt-3">
+                                        <i class="fas fa-cogs text-primary fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Les données d'analyse ne sont pas disponibles. Veuillez réessayer.
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Caractéristiques détaillées -->
+                {% if style_report.detailed_analysis %}
+                <div class="analysis-section">
+                    <h3 class="mb-4">
+                        <i class="fas fa-search me-2"></i>Caractéristiques détaillées
+                    </h3>
+                    
+                    <div class="row">
+                        <!-- Style -->
+                        <div class="col-md-6 mb-4">
+                            <h5 class="mb-3"><i class="fas fa-pen-nib me-2 text-primary"></i>Style d'écriture</h5>
+                            {% if style_report.detailed_analysis.academic_indicators %}
+                            <div class="mb-3">
+                                <strong>Indicateurs académiques détectés :</strong>
+                                <div class="mt-2">
+                                    {% for indicator in style_report.detailed_analysis.academic_indicators %}
+                                    <span class="feature-tag">{{ indicator }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if style_report.detailed_analysis.structural_patterns %}
+                            <div class="mb-3">
+                                <strong>Structures textuelles :</strong>
+                                <div class="mt-2">
+                                    {% for pattern in style_report.detailed_analysis.structural_patterns %}
+                                    <span class="feature-tag">{{ pattern }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if style_report.detailed_analysis.transition_words %}
+                            <div>
+                                <strong>Connecteurs logiques :</strong>
+                                <p class="mt-2 mb-0">
+                                    {{ style_report.detailed_analysis.transition_words }} connecteurs détectés
+                                </p>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Vocabulaire -->
+                        <div class="col-md-6 mb-4">
+                            <h5 class="mb-3"><i class="fas fa-book me-2 text-success"></i>Vocabulaire</h5>
+                            {% if style_report.detailed_analysis.technical_terms %}
+                            <div class="mb-3">
+                                <strong>Termes techniques :</strong>
+                                <div class="mt-2">
+                                    {% for term in style_report.detailed_analysis.technical_terms %}
+                                    <span class="feature-tag">{{ term }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if style_report.detailed_analysis.vocabulary_richness %}
+                            <div>
+                                <strong>Richesse lexicale :</strong>
+                                <p class="mt-2 mb-0">
+                                    Niveau : <strong>{{ style_report.detailed_analysis.vocabulary_richness }}</strong>
+                                </p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Recommandations -->
+                {% if style_report.recommendations %}
+                <div class="analysis-section">
+                    <h3 class="mb-4">
+                        <i class="fas fa-lightbulb me-2 text-warning"></i>Recommandations d'amélioration
+                    </h3>
+                    
+                    <div class="improvement-card">
+                        <h5 class="mb-3">
+                            <i class="fas fa-graduation-cap me-2"></i>
+                            Suggestions pour optimiser votre style académique
+                        </h5>
+                        
+                        <ul class="mb-0">
+                            {% for rec in style_report.recommendations %}
+                            <li class="mb-2">{{ rec.suggestion if rec.suggestion else rec }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6><i class="fas fa-tips me-2 text-info"></i>Conseils pratiques</h6>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <div class="academic-card p-3 h-100">
+                                    <h6 class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>À conserver</h6>
+                                    <ul class="mb-0">
+                                        <li>Votre niveau de formalité est approprié</li>
+                                        <li>Structure des phrases équilibrée</li>
+                                        <li>Vocabulaire adapté au domaine</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="academic-card p-3 h-100">
+                                    <h6 class="mb-2"><i class="fas fa-exclamation-circle text-warning me-2"></i>À améliorer</h6>
+                                    <ul class="mb-0">
+                                        <li>Varier les structures de phrases</li>
+                                        <li>Ajouter des connecteurs logiques</li>
+                                        <li>Enrichir le vocabulaire académique</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Applications -->
+                <div class="analysis-section">
+                    <h3 class="mb-4">
+                        <i class="fas fa-robot me-2 text-primary"></i>Application à la génération
+                    </h3>
+                    
+                    <div class="alert-academic alert-academic-info mb-4">
+                        <h6><i class="fas fa-info-circle me-2"></i>Comment ces données seront utilisées</h6>
+                        <p class="mb-0">
+                            Votre style d'écriture analysé sera utilisé pour personnaliser la génération IA
+                            de votre rapport. Le système reproduira vos caractéristiques stylistiques tout
+                            en respectant les normes académiques.
+                        </p>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="academic-card p-4 h-100">
+                                <h6 class="mb-3"><i class="fas fa-magic me-2 text-success"></i>Génération personnalisée</h6>
+                                <ul class="mb-0">
+                                    <li>Reproduction de votre niveau de formalité</li>
+                                    <li>Adaptation de la longueur des phrases</li>
+                                    <li>Utilisation de votre vocabulaire caractéristique</li>
+                                    <li>Respect de vos structures préférées</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="academic-card p-4 h-100">
+                                <h6 class="mb-3"><i class="fas fa-file-alt me-2 text-primary"></i>Rapport cohérent</h6>
+                                <ul class="mb-0">
+                                    <li>Style uniforme sur tout le document</li>
+                                    <li>Transition fluide entre les sections</li>
+                                    <li>Cohérence terminologique</li>
+                                    <li>Adaptation aux normes ENSA</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Étapes suivantes -->
+            <div class="next-steps">
+                <div class="row align-items-center">
+                    <div class="col-lg-8">
+                        <h3 class="mb-3">Prêt à générer votre rapport ?</h3>
+                        <p class="mb-0" style="opacity: 0.9;">
+                            Votre style a été analysé avec succès. Passez maintenant à la génération
+                            de votre rapport de stage personnalisé.
+                        </p>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('editor', session_id=session_id) }}" 
+                               class="btn btn-light btn-lg">
+                                <i class="fas fa-edit me-2"></i>Passer à l'éditeur
+                            </a>
+                            <a href="{{ url_for('start_report') }}" 
+                               class="btn btn-outline-light btn-lg">
+                                <i class="fas fa-redo me-2"></i>Modifier les informations
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Options d'export -->
+            <div class="mt-4">
+                <h5 class="mb-3"><i class="fas fa-download me-2"></i>Télécharger l'analyse</h5>
+                <div class="export-options">
+                    <button class="btn btn-outline-primary export-btn" onclick="exportAsPDF()">
+                        <i class="fas fa-file-pdf me-2"></i>PDF
+                    </button>
+                    <button class="btn btn-outline-success export-btn" onclick="exportAsJSON()">
+                        <i class="fas fa-code me-2"></i>JSON
+                    </button>
+                    <button class="btn btn-outline-info export-btn" onclick="copyToClipboard()">
+                        <i class="fas fa-copy me-2"></i>Copier le résumé
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Initialiser les graphiques
+    initCharts();
+    
+    // Animation des métriques
+    animateMetrics();
+});
+
+function initCharts() {
+    // Graphique de formalité
+    const ctx = document.createElement('canvas');
+    ctx.height = 150;
+    $('.chart-container').html(ctx);
+    
+    // Simple visualisation (pourrait être étendue avec Chart.js)
+    {% if style_report.summary %}
+    const formalityScore = {{ style_report.summary.formality_score|default(50) }};
+    const scoreElement = document.createElement('div');
+    scoreElement.className = 'score-meter';
+    scoreElement.innerHTML = `<div class="score-indicator" style="left: ${formalityScore}%;"></div>`;
+    $('.chart-container').html(scoreElement);
+    {% endif %}
+}
+
+function animateMetrics() {
+    $('.metric-value').each(function() {
+        const $this = $(this);
+        const text = $this.text();
+        const isNumber = /^\d+%?$/.test(text.replace('%', ''));
+        
+        if (isNumber) {
+            const value = parseInt(text.replace('%', ''));
+            $({ count: 0 }).animate({
+                count: value
+            }, {
+                duration: 1500,
+                easing: 'swing',
+                step: function() {
+                    $this.text(Math.floor(this.count) + (text.includes('%') ? '%' : ''));
+                }
+            });
+        }
+    });
+}
+
+function exportAsPDF() {
+    alert('Export PDF en développement. Cette fonctionnalité sera disponible prochainement.');
+    // En production : appeler une API pour générer un PDF
+    // window.open('/api/export-analysis-pdf?session_id={{ session_id }}', '_blank');
+}
+
+function exportAsJSON() {
+    const analysisData = {{ style_report|tojson|safe }};
+    const dataStr = JSON.stringify(analysisData, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = 'analyse_style_{{ session_id }}.json';
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+}
+
+function copyToClipboard() {
+    const summary = `Rapport d'analyse de style - {{ app_name }}
+    
+Niveau académique: {{ style_report.summary.academic_level|default("Non spécifié") }}
+Score de formalité: {{ style_report.summary.formality_score|default(0) }}% ({{ style_report.summary.formality_level|default("Modéré") }})
+Complexité: {{ style_report.summary.complexity|default("Moyenne") }}
+Vocabulaire: {{ style_report.summary.vocabulary|default("Standard") }}
+Termes techniques: {{ style_report.summary.technical_terms_count|default(0) }}
+
+Généré le: {{ style_report.timestamp|default("Aujourd'hui") }}
+Session: {{ session_id }}
+    
+---`;
+    
+    navigator.clipboard.writeText(summary).then(() => {
+        alert('Résumé copié dans le presse-papier !');
+    });
+}
+
+// Sauvegarde automatique
+window.addEventListener('beforeunload', function() {
+    // Sauvegarder l'ID de session
+    localStorage.setItem('lastAnalysisSession', '{{ session_id }}');
+});
+</script>
+{% endblock %}
+@app.route('/style-analysis', methods=['POST'])
+def analyze_style():
+    """Analyse le style d'un texte de référence"""
+    try:
+        data = request.json
+        reference_text = data.get('reference_text', '')
+        student_info = data.get('student', {})
+        company_info = data.get('company', {})
+        
+        print(f"📝 Texte de référence (premiers 100 caractères): {reference_text[:100]}...")
+        print(f"👤 Info étudiant: {student_info}")
+        print(f"🏢 Info entreprise: {company_info}")
+        
+        # Créer une nouvelle session
+        session_id = create_session()
+        print(f"✅ Session créée: {session_id}")
+        
+        # Analyser le style
+        prompt_generator = AcademicPromptGenerator(reference_text)
+        style_report = prompt_generator.get_style_report()
+        
+        print(f"📊 Rapport de style généré: {type(style_report)}")
+        print(f"📊 Contenu du rapport: {style_report}")
+        
+        # Stocker les données
+        session_data = {
+            'reference_text': reference_text,
+            'student_info': student_info,
+            'company_info': company_info,
+            'style_report': style_report,
+            'prompt_generator': prompt_generator  # Note: Cet objet n'est pas JSON-serializable!
+        }
+        
+        update_session_data(session_id, session_data)
+        
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'style_report': style_report,
+            'message': 'Analyse de style complétée avec succès'
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur analyse style: {e}")
+        traceback.print_exc()  # Ajoutez cette ligne pour voir la trace complète
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
