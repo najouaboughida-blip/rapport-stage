@@ -1,13 +1,14 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-venv/
-
-# Backup
-backup_avant_modifications/
-
-# OS
-.DS_Store
-Thumbs.db
+# Python 
+__pycache__/ 
+*.pyc 
+*.pyo 
+*.pyd 
+venv/ 
+nouveau_venv/ 
+ 
+# Backup 
+backup_avant_modifications/ 
+ 
+# OS 
+.DS_Store 
+Thumbs.db 
